@@ -3,8 +3,8 @@ Copyright © 2015, BVAgile. All rights reserved.
 Contacts: <bvagile@gmail.com>
 */
 
-#define COUNT_SIGNALS 64 // 44 + 20
-#define COUNT_STORE 21
+#define COUNT_SIGNALS 45 // 25 + 20
+#define COUNT_STORE 6
 #include "Types.h"
 #include "MgtClient.h"
 #include "schedul.h"
@@ -21,11 +21,23 @@ Contacts: <bvagile@gmail.com>
 #include <Ticker.h>
 #include "DallasTemperature.h"
 
-#define PIN_BUTTON      0
-#define PIN_LED_MODE    13
-#define PIN_ONEWIRE     2
+#define BASIC_R1
+//#define BASIC_R2
+//#define BASIC_R3
 
-static byte pinDIO[9] = { 3, 4, 5, 9, 10, 12, 14, 15, 16 };
+#if defined(BASIC_R1)
+#define PIN_ONEWIRE   14
+#elif defined(BASIC_R2)
+#define PIN_ONEWIRE   2
+#elif defined(BASIC_R3)
+#define PIN_ONEWIRE   10
+#endif
+
+#define PIN_BUTTON    0
+#define PIN_RELAY     12
+#define PIN_LED_MODE  13
+#define PIN_DI  3
+
 
 struct MapNameItem {
   char* name;
@@ -55,23 +67,25 @@ void debugLog(const __FlashStringHelper* aFormat, ...) {
   va_end(args);
 }
 
-static struct Signal* sDIO; // GPIO_3, GPIO_4, GPIO_5, GPIO_9, GPIO_10, GPIO_12, GPIO_14, GPIO_15, GPIO_16
-static struct Signal* sA0; // A0
+static struct Signal* sRelay; // relay
 static struct Signal* sSensor; // sensor_1, sensor_2, sensor_3, sensor_4
-static struct Signal* sSchedule; // schedule_1, schedule_2, schedule_3, schedule_4
-static struct Signal* sStored; // stored_1, stored_2, stored_3, stored_4, stored_5, stored_6, stored_7, stored_8
-static struct Signal* sVariable; // variable_1, variable_2, variable_3, variable_4, variable_5, variable_6, variable_7, variable_8
+static struct Signal* sDI; // DI
+static struct Signal* sSchedule; // schedule_1, schedule_2
+static struct Signal* sStored; // stored_1, stored_2, stored_3, stored_4, stored_5
+static struct Signal* sVariable; // variable_1, variable_2
+static struct Signal* sReverse; // reverse
 static struct Signal* sScriptMode; // scriptMode
 static struct Signal* sScript; // script
 static struct Signal* sDebug; // debug
-static struct Signal* sScheduleData; // scheduleData_1, scheduleData_2, scheduleData_3, scheduleData_4
+static struct Signal* sScheduleData; // scheduleData_1, scheduleData_2
+static struct Signal* sLed; // led
 static struct Signal* sIPAddress; // IPAddress
 static struct Signal* sVersion; // version
 static struct Signal* sUpdate; // update
 
 static struct MgtClient client;
 
-float variables[8] = { NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN };
+float variables[2] = {NAN, NAN};
 
 static OneWire oneWire(PIN_ONEWIRE);
 static DallasTemperature sensors[4] = {
@@ -81,17 +95,23 @@ static DallasTemperature sensors[4] = {
   DallasTemperature(EC_config.app.romArr[3], &oneWire)
 };
 
+static bool getRelay() {
+  if (EC_config.app.reverse)
+    return !digitalRead(PIN_RELAY);
+  return digitalRead(PIN_RELAY);
+}
 
-// write with confirmation for "DIO"
-static void write_DIO(int aNumber, bool aValue) {
-  if ((EC_config.app.DIOMode[aNumber] & 0x01) != 1) {
-    mgt_writeAns(&client, sDIO + aNumber, erWriteFailed);
-    return;
-  }
-  digitalWrite(pinDIO[aNumber], (EC_config.app.DIOMode[aNumber] & 0x80) ? (!aValue) : aValue);
-  signal_updateInt(sDIO + aNumber, aValue, getUTCTime());
-  mgt_writeAns(&client, sDIO + aNumber, erOk); // confirmation
+static void setRelay(bool aValue) {
+  if (EC_config.app.reverse)
+    aValue = !aValue;
+  digitalWrite(PIN_RELAY, aValue);
+}
 
+// write with confirmation for "relay"
+static void write_relay(bool aValue) {
+  setRelay(aValue);
+  signal_updateInt(sRelay, aValue, getUTCTime());
+  mgt_writeAns(&client, sRelay, erOk); // confirmation
 }
 
 // write with confirmation for "scriptMode"
@@ -153,18 +173,21 @@ static void write_scheduleData(int aNumber, __uint8* aValue) {
   int start = aNumber ? EC_config.app.schedulePtr[aNumber - 1] * 9 : 0;
   int startMove = EC_config.app.schedulePtr[aNumber] * 9;
   int shift = (length - 2) - (startMove - start);
-  int sizeMove = EC_config.app.schedulePtr[3] * 9 - startMove;
+  //  int sizeMove = EC_config.schedulePtr[3] * 9 - startMove;
+  int sizeMove = EC_config.app.schedulePtr[1] * 9 - startMove;
 
   if (sizeMove < 0)
     sizeMove = -sizeMove;
 
 
-  if ((EC_config.app.schedulePtr[3] * 9 + shift) > sizeof(EC_config.app.scheduleData)) {
+  //if ((EC_config.schedulePtr[3] * 9 + shift) > sizeof(EC_config.scheduleData)) {
+  if ((EC_config.app.schedulePtr[1] * 9 + shift) > sizeof(EC_config.app.scheduleData)) {
     mgt_writeAns(&client, sScheduleData + aNumber, erWriteFailed);
     return;
   }
 
-  for (int i = 0; i < 4; i++) {
+  //  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 2; i++) {
     if (i < aNumber)
       continue;
     EC_config.app.schedulePtr[i] += shift / 9;
@@ -205,6 +228,23 @@ static void write_variable(int aNumber, float aValue) {
   mgt_writeAns(&client, sVariable + aNumber, erOk); // confirmation
 }
 
+// write with confirmation for "reverse"
+static void write_reverse(bool aValue) {
+  EC_config.app.reverse = aValue;
+  EC_save();
+  digitalWrite(PIN_RELAY, !digitalRead(PIN_RELAY));
+  signal_updateInt(sReverse, aValue, getUTCTime());
+  mgt_writeAns(&client, sReverse, erOk); // confirmation
+}
+
+// write with confirmation for "led"
+static void write_led(bool aValue) {
+  EC_config.app.led = aValue;
+  EC_save();
+
+  signal_updateInt(sLed, aValue, getUTCTime());
+  mgt_writeAns(&client, sLed, erOk); // confirmation
+}
 
 // write with confirmation for "update"
 static void write_update(bool aValue) {
@@ -212,7 +252,7 @@ static void write_update(bool aValue) {
   myUpdate();
 }
 
-static void readScheduleData(int aNumber, enum OpCode aOpCode) {
+static void readScheduleData(int aNumber) {
   int begin = aNumber ? EC_config.app.schedulePtr[aNumber - 1] * 9 : 0;
   int end = EC_config.app.schedulePtr[aNumber] * 9;
   __int16 value = end - begin + 2;
@@ -230,14 +270,8 @@ static void readScheduleData(int aNumber, enum OpCode aOpCode) {
   *(EC_config.app.scheduleData + begin - 2) = *((__uint8*)&bias + 0);
   *(EC_config.app.scheduleData + begin - 1) = *((__uint8*)&bias + 1);
 
-  if (aOpCode == opRead) {
-    signal_updatePtr(sScheduleData + aNumber, EC_config.app.scheduleData + begin - 4, getUTCTime());
-    mgt_readAns(&client, sScheduleData + aNumber, erOk);
-  }
-  else {
-    signal_updatePtr(sScheduleData + aNumber, EC_config.app.scheduleData + begin - 4, LLONG_MIN);
-    mgt_send(&client, sScheduleData + aNumber);
-  }
+  signal_updatePtr(sScheduleData + aNumber, EC_config.app.scheduleData + begin - 4, getUTCTime());
+  mgt_readAns(&client, sScheduleData + aNumber, erOk);
 
   *(EC_config.app.scheduleData + begin - 4) = temp[0];
   *(EC_config.app.scheduleData + begin - 3) = temp[1];
@@ -248,37 +282,37 @@ static void readScheduleData(int aNumber, enum OpCode aOpCode) {
 static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalValue* aWriteValue) {
   switch (aOpCode) {
     case opRead:
-      if ((aSignal >= sScheduleData) && (aSignal < sIPAddress))
-        readScheduleData(aSignal - sScheduleData, aOpCode);
+      if ((aSignal >= sScheduleData) && (aSignal < sLed))
+        readScheduleData(aSignal - sScheduleData);
       else {
         signal_updateTime(aSignal, getUTCTime());
         mgt_readAns(&client, aSignal, erOk);
       }
       break;
     case opAttach:
-/*      if ((aSignal >= sScheduleData) && (aSignal < sIPAddress))
-        readScheduleData(aSignal - sScheduleData, aOpCode);
-      else
-        mgt_send(&client, aSignal);*/
       break;
-
     case opWrite:
-      if ((aSignal >= sDIO) && (aSignal < (sDIO + 9)))
-        write_DIO(aSignal - sDIO, aWriteValue->u.m_bool);
+      if (aSignal == sRelay)
+        write_relay(aWriteValue->u.m_bool);
       else if ((aSignal >= sStored) && (aSignal < sVariable))
         write_stored(aSignal - sStored, aWriteValue->u.m_float);
-      else if ((aSignal >= sVariable) && (aSignal < sScriptMode))
+      else if ((aSignal >= sVariable) && (aSignal < sReverse))
         write_variable(aSignal - sVariable, aWriteValue->u.m_float);
+      if (aSignal == sReverse)
+        write_reverse(aWriteValue->u.m_bool);
       else if (aSignal == sScriptMode)
         write_scriptMode(aWriteValue->u.m_bool);
       else if (aSignal == sScript)
         write_script(aWriteValue->u.m_blob);
       else if (aSignal == sDebug)
         write_debug(aWriteValue->u.m_blob);
-      else if ((aSignal >= sScheduleData) && (aSignal < sIPAddress))
+      else if ((aSignal >= sScheduleData) && (aSignal < sLed))
         write_scheduleData(aSignal - sScheduleData, aWriteValue->u.m_blob);
+      else if (aSignal == sLed)
+        write_led(aWriteValue->u.m_bool);
       else if (aSignal == sUpdate)
         write_update(aWriteValue->u.m_bool);
+
       break;
     case opWriteAsync:
       break;
@@ -304,21 +338,24 @@ void tick() {
     blink_loop++;
   }
 
-
   uint32_t t = millis();
   but_run(&but, t);
-
+  if (but.butInfo == BUT_NONE) {
+    if (but_get(&but) == BUT_CLICK) {
+      if (!EC_config.app.scriptMode)
+        digitalWrite(PIN_RELAY, !digitalRead(PIN_RELAY));
+      //EC_config.scriptMode = 0; // ручной режим
+    }
+  }
 }
-
-__uint16 getRegMode(__uint8 aNum) {
-    return EC_config.app.regMode[aNum];
-}
-
 
 void setup() {
   // Последовательный порт для отладки
   Serial.begin(115200);
   debugLog(F("\n\nFree memory %d\n"), ESP.getFreeHeap());
+  debugLog(F("ops-tops-5\n"), ESP.getFreeHeap());
+
+  pinMode(PIN_DI, INPUT_PULLUP);
 
   // Инициализация EEPROM
   EC_begin();
@@ -351,71 +388,42 @@ void setup() {
   if (!mgt_init(&client, &deviceConfig, &mySocket))
     while (1);
 
-  sDIO = mgt_createSignal(&client, "GPIO_3", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(0), 0);
-  mgt_createSignal(&client, "GPIO_4", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(1), 0);
-  mgt_createSignal(&client, "GPIO_5", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(2), 0);
-  mgt_createSignal(&client, "GPIO_9", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(3), 0);
-  mgt_createSignal(&client, "GPIO_10", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(4), 0);
-  mgt_createSignal(&client, "GPIO_12", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(5), 0);
-  mgt_createSignal(&client, "GPIO_14", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(6), 0);
-  mgt_createSignal(&client, "GPIO_15", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(7), 0);
-  mgt_createSignal(&client, "GPIO_16", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(8), 0);
-  sA0 = mgt_createSignal(&client, "A0", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  sRelay = mgt_createSignal(&client, "relay", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sSensor = mgt_createSignal(&client, "sensor_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
   mgt_createSignal(&client, "sensor_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
   mgt_createSignal(&client, "sensor_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
   mgt_createSignal(&client, "sensor_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
+  sDI = mgt_createSignal(&client, "DI", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sSchedule = mgt_createSignal(&client, "schedule_1", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "schedule_2", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "schedule_3", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "schedule_4", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sStored = mgt_createSignal(&client, "stored_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_5", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "stored_6", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "stored_7", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "stored_8", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  sVariable = mgt_createSignal(&client, "variable_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(5), 0);
-  mgt_createSignal(&client, "variable_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(6), 0);
-  mgt_createSignal(&client, "variable_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(7), 0);
-  mgt_createSignal(&client, "variable_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(8), 0);
-  mgt_createSignal(&client, "variable_5", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(9), 0);
-  mgt_createSignal(&client, "variable_6", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(10), 0);
-  mgt_createSignal(&client, "variable_7", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(11), 0);
-  mgt_createSignal(&client, "variable_8", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(12), 0);
+  sVariable = mgt_createSignal(&client, "variable_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  mgt_createSignal(&client, "variable_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  sReverse = mgt_createSignal(&client, "reverse", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScriptMode = mgt_createSignal(&client, "scriptMode", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScript = mgt_createSignal(&client, "script", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sDebug = mgt_createSignal(&client, "debug", tpBlob, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScheduleData = mgt_createSignal(&client, "scheduleData_1", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "scheduleData_2", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "scheduleData_3", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "scheduleData_4", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  sLed = mgt_createSignal(&client, "led", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sIPAddress = mgt_createSignal(&client, "IPAddress", tpString, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sVersion = mgt_createSignal(&client, "version", tpString, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sUpdate = mgt_createSignal(&client, "update", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
 
 
-  TimeStamp t = getUTCTime();
+  signal_updateInt(sScriptMode, EC_config.app.scriptMode, 0);
+  signal_updateInt(sLed, EC_config.app.led, 0);
 
-  signal_updateInt(sScriptMode, EC_config.app.scriptMode, t);
+  pinMode(PIN_RELAY, OUTPUT);
   but_init(&but, PIN_BUTTON, 2000);
+  signal_updateInt(sReverse, EC_config.app.reverse, 0);
 
-  for (int i = 0; i < 4; i++)
-    signal_updateDouble(sSensor + i, NAN, t);
-
-  for (int i = 0; i < 9; i++) {
-    digitalWrite(pinDIO[i], (EC_config.app.DIOMode[i] & 0x80) ? true : false);
-    pinMode(pinDIO[i], EC_config.app.DIOMode[i] & 0x7f);
-  }
-
-  //pinMode(pinDIO[4], INPUT_PULLUP); // RX
-
-  for (int i = 0; i < 8; i++) {
-    signal_updateDouble(sStored + i, EC_config.app.stored[i], t);
-    signal_updateDouble(sVariable + i, variables[i], t);
-  }
+  for (int i = 0; i < 5; i++)
+    signal_updateDouble(sStored + i, EC_config.app.stored[i], 0);
 
   delay(1); // разобъём долгую инициализацию
   bool newFind = false;
@@ -429,14 +437,20 @@ void setup() {
   if (newFind)
     EC_save(); // сохраним новые привязки
 
+#if defined(BASIC_R1)
+  char* ver = "PLC Sonoff Basic R1 v1.6 01/III/2020";
+#elif defined(BASIC_R2)
+  char* ver = "PLC Sonoff Basic R2 v1.6 01/III/2020";
+#elif defined(BASIC_R3)
+  char* ver = "PLC Sonoff Basic R3 v1.6 01/III/2020";
+#endif
 
-  const char* ver = "PLC 8285 v0.1 02/VI/2020";
-  signal_updatePtr(sVersion, ver, t);
 
-  signal_updatePtr(sScript, EC_config.app.script, t);
-  signal_updatePtr(sDebug, debugArr, t);
+  signal_updatePtr(sVersion, ver, 0);
 
-  signal_updatePtr(sIPAddress, localIp, t);
+  signal_updatePtr(sScript, EC_config.app.script, 0);
+  signal_updatePtr(sDebug, debugArr, 0);
+  signal_updatePtr(sIPAddress, localIp, 0);
 
   bk_init(EC_config.app.script + 2);
   mgt_start(&client, EC_config.net.host1);
@@ -461,12 +475,13 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 }
 
 struct Period _1_min = { 1L * 60 * 1000, 0 };
-struct Period _1_sec = { 1L * 1000, 0 };
+//struct Period _801_ms = { 801, 0 };
 
 void loop() {
   static uint32_t ms2 = 0;
 
   static bool synchronization = false;
+
 
   uint32_t ms = millis();
   switch (but_get(&but)) {
@@ -478,14 +493,18 @@ void loop() {
       }
       break;
     default:
-      break;
+        break;
   }
 
   if (ms < ms2 || (ms - ms2) > 500) {
     ms2 = ms;
     if (isAP == false) {
-      if (WiFi.status() == WL_CONNECTED)
-        blink_mode = 0B11111111;
+      if (WiFi.status() == WL_CONNECTED) {
+        if (sLed->m_value.u.m_bool)
+          blink_mode = 0B11111111;
+        else
+          blink_mode = 0;
+      }
       else {
         blink_mode = 0B00000101;
         WiFi_begin();
@@ -494,108 +513,112 @@ void loop() {
   }
 
   HTTP_loop();
+  delay(1); // TODO борюсь с переконектами
 
-  if (!isAP) { // если НЕ режим точки доступа
 
-    TimeStamp t = getUTCTime();
+  TimeStamp t = getUTCTime();
 
-    bool temperatureDirty[4] = {false, false, false, false};
-    bool DIODirty[9] = {false, false, false, false, false, false, false, false, false};
-    bool A0Dirty = false;
-    bool variableDirty[8] = {false, false, false, false, false, false, false, false};
-    bool scheduleDirty[4] = {false, false, false, false};
+  bool temperatureDirty[4] = {false, false, false, false};
+  bool relayDirty = false;
+  bool variableDirty[2] = {false, false};
+  bool DIDirty = false;
+  bool scriptModeDirty = false;
+  bool scheduleDirty[2] = {false, false};
 
-    static __uint32 convertTime = 0;
-    static bool convertDone = false;
+  static __uint32 convertTime = 0;
+  static bool convertDone = false;
 
-    if ((__uint32)(millis() - convertTime) >= 800) {
-      bool errorRead = false;
-      if (convertDone) {
+  bool flagEvent = periodEvent(&_1_min, t);
+
+  bool DI = digitalRead(PIN_DI); // читаем цифровой вход
+  if (flagEvent || (sDI->m_value.u.m_bool ^ DI)) {
+    signal_updateInt(sDI, DI, t);
+    DIDirty = true;
+  }
+
+  for (int i = 0; i < 2; i++) { // TODO перенести вниз, после сценария
+    float v = sVariable[i].m_value.u.m_float;
+    if ((v == v) || (variables[i] == variables[i])) {
+      if (flagEvent || (v != variables[i])) {
+        signal_updateDouble(sVariable + i, variables[i], t);
+        variableDirty[i] = true;
+      }
+    }
+  }
+
+  //if (periodEvent(&_801_ms, t)) {
+  if ((__uint32)(millis() - convertTime) >= 800) {
+    bool errorRead = false;
+    if (convertDone) {
+      convertDone = false;
+      for (int i = 0; i < 4; i++) {
+        temperatureDirty[i] = sensors[i].read();
+        if (temperatureDirty[i]) {
+          signal_updateDouble(sSensor + i, sensors[i].value, t);
+          errorRead = true;
+        }
+      }
+    }
+    if (!errorRead) {
+      if (DallasTemperature::convertAll(&oneWire))
+        convertDone = true;
+      else
         convertDone = false;
-        for (int i = 0; i < 4; i++) {
-          temperatureDirty[i] = sensors[i].read();
-          if (temperatureDirty[i]) {
-            signal_updateDouble(sSensor + i, sensors[i].value, t);
-            errorRead = true;
-          }
-        }
-      }
-      if (!errorRead) {
-        if (DallasTemperature::convertAll(&oneWire))
-          convertDone = true;
-        else
-          convertDone = false;
-      }
-      convertTime = millis();
     }
+    convertTime = millis();
+  }
 
-    if (synchronization)
-      sch_run(t);
+  if (synchronization)
+    sch_run(t);
 
-    int analog = analogRead(PIN_A0);
-    sleepms(2);
-    if ((abs(sA0->m_value.u.m_float - analog) >= 10) || (periodEvent(&_1_sec, t))) {
-      signal_updateDouble(sA0, analog, t);
-      A0Dirty = true;
+  for (int i = 0; i < 2; i++) {
+    if (sSchedule[i].m_value.u.m_bool ^ canals[i]) {
+      signal_updateInt(sSchedule + i, canals[i], t);
+      scheduleDirty[i] = true;
     }
-
-    bool flagEvent = periodEvent(&_1_min, t);
-
-    for (int i = 0; i < 4; i++) {
-      if (sSchedule[i].m_value.u.m_bool ^ canals[i]) {
-        signal_updateInt(sSchedule + i, canals[i], t);
-        scheduleDirty[i] = true;
-      }
-    }
-
-    if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
-      if (!bk_run())
-        EC_config.app.scriptMode = false;
-    }
-
-    for (int i = 0; i < 8; i++) {
-      float v = sVariable[i].m_value.u.m_float;
-      if ((v == v) || (variables[i] == variables[i])) { // NAN отправляется только по изменению
-        if (flagEvent || (v != variables[i])) {
-          signal_updateDouble(sVariable + i, variables[i], t);
-          variableDirty[i] = true;
-        }
-      }
-    }
-
-    for (int i = 0; i < 9; i++) {
-      bool dio = digitalRead(pinDIO[i]);
-      if (EC_config.app.DIOMode[i] & 0x80)
-       dio = !dio;
-      if ((flagEvent) || (sDIO[i].m_value.u.m_bool ^ dio)) {
-        signal_updateInt(sDIO + i, dio, t);
-        DIODirty[i] = true;
-      }
-    }
+  }
 
 
+  if ((sScriptMode->m_value.u.m_bool == true) && (EC_config.app.scriptMode == false)) // если нажали на механическую кнопку
+    EC_save();
 
-    static bool toggleServer = false;
+  if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
+    if (!bk_run())
+      EC_config.app.scriptMode = false;
+  }
 
+  bool relay = getRelay();
+  if (flagEvent || (sRelay->m_value.u.m_bool ^ relay)) {
+    signal_updateInt(sRelay, relay, t);
+    relayDirty = true;
+  }
+
+  if (sScriptMode->m_value.u.m_bool ^ EC_config.app.scriptMode) {
+    signal_updateInt(sScriptMode, EC_config.app.scriptMode, t);
+    scriptModeDirty = true;
+  }
+
+  static bool toggleServer = false;
+
+  if (!isAP) {
     MgtState mgtState = mgt_run(&client);
     if (mgtState == stConnected) {
+      if (relayDirty)
+        mgt_send(&client, sRelay);
       for (int i = 0; i < 4; i++) {
         if (temperatureDirty[i])
           mgt_send(&client, sSensor + i);
+      }
+      for (int i = 0; i < 2; i++) {
         if (scheduleDirty[i])
           mgt_send(&client, sSchedule + i);
-      }
-      for (int i = 0; i < 9; i++) {
-          if (DIODirty[i])
-              mgt_send(&client, sDIO + i);
-      }
-
-      for (int i = 0; i < 8; i++) {
         if (variableDirty[i])
           mgt_send(&client, sVariable + i);
       }
-      if (A0Dirty)
-        mgt_send(&client, sA0);
+      if (scriptModeDirty)
+        mgt_send(&client, sScriptMode);
+      if (DIDirty)
+        mgt_send(&client, sDI);
     }
     else if (mgtState == stEstablished) {
       TimeStamp t = getUTCTime();
@@ -607,24 +630,24 @@ void loop() {
           signal_updateTime(sSensor + i, t);
           mgt_send(&client, sSensor + i);
         }
+      }
+
+      signal_updateTime(sRelay, t);
+      mgt_send(&client, sRelay); // relay
+      signal_updateTime(sReverse, t);
+      mgt_send(&client, sReverse); // reverse
+
+      for (int i = 0; i < 2; i++) {
         signal_updateTime(sSchedule + i, t);
         mgt_send(&client, sSchedule + i); // schedule
-      }
-
-      for (int i = 0; i < 9; i++) {
-          signal_updateTime(sDIO + i, t);
-          mgt_send(&client, sDIO + i);
-      }
-
-      for (int i = 0; i < 8; i++) {
-        if (variables[i] == variables[i]) { // NAN не будем отправлять (хотя клиенты могут его вычитать), чтобы не инициировать архивирование параметра
-          signal_updateTime(sVariable + i, t);
-          mgt_send(&client, sVariable + i); // variable
-        }
+        signal_updateTime(sVariable + i, t);
+        mgt_send(&client, sVariable + i); // variable
       }
 
       signal_updateTime(sScriptMode, t);
       mgt_send(&client, sScriptMode); // scriptMode
+      signal_updateTime(sDI, t);
+      mgt_send(&client, sDI); // DI
     }
     else if (mgtState == stDisconnect) {
       if (strlen(EC_config.net.host2)) {
@@ -650,7 +673,7 @@ __int32 getBias() {
 }
 
 __uint8 getEventInfo(__uint8 aIndex) {
-  if (aIndex < EC_config.app.schedulePtr[3]) {
+  if (aIndex < EC_config.app.schedulePtr[1]) {
     __uint8* ptr = EC_config.app.scheduleData + 9 * aIndex;
     return ptr[0];
   }
@@ -659,7 +682,7 @@ __uint8 getEventInfo(__uint8 aIndex) {
 }
 
 __uint32 getStartEvent(__uint8 aIndex) {
-  if (aIndex < EC_config.app.schedulePtr[3]) {
+  if (aIndex < EC_config.app.schedulePtr[1]) {
     __uint8* ptr = EC_config.app.scheduleData + 1 + 9 * aIndex;
     __uint32 time = (ptr[3] << 24) + (ptr[2] << 16) + (ptr[1] << 8) + ptr[0];
     return time;
@@ -669,7 +692,7 @@ __uint32 getStartEvent(__uint8 aIndex) {
 }
 
 __uint32 getStopEvent(__uint8 aIndex) {
-  if (aIndex < EC_config.app.schedulePtr[3]) {
+  if (aIndex < EC_config.app.schedulePtr[1]) {
     __uint8* ptr = EC_config.app.scheduleData + 1 + 4 + 9 * aIndex;
     __uint32 time = (ptr[3] << 24) + (ptr[2] << 16) + (ptr[1] << 8) + ptr[0];
     return time;
@@ -710,7 +733,7 @@ static struct Signal* findSignal(char* aName) {
       return mapSignalName[i].signal; // если нашли в кэше
   }
 
-  struct Signal* s = sDIO;
+  struct Signal* s = sRelay;
   for (int i = 0; i < COUNT_SIGNALS; i++) {
     if (s->m_name) {
       if (strcmp(s->m_name, aName) == 0) {
@@ -743,20 +766,12 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
     return NAN;
   }
 
-  int num = s - sDIO;
-  if (num < 9) {
-    bool b = digitalRead(pinDIO[num]);
-    if (EC_config.app.DIOMode[num] & 0x80)
-      b = !b;
-    return b;
-  }
-  else if (s == sA0) {
-    float f = analogRead(PIN_A0);
-    sleepms(2);
-    return f;
-  }
-  else if ((s >= sVariable) && (s < sScriptMode))
-    return variables[s - sVariable];
+  if (s == sRelay)
+    return getRelay();
+  else if (s == sVariable)
+    return variables[0];
+  else if (s == (sVariable + 1))
+    return variables[1];
 
   if (s->m_value.m_time == -1)
       return NAN;
@@ -775,14 +790,18 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
 
 void bk_setSignal(char* aName, float aValue) {
   struct Signal* s = findSignal(aName);
-  int num = s - sDIO;
-  if (num < 9) {
-    if (aValue == aValue)
-      digitalWrite(pinDIO[num], (EC_config.app.DIOMode[num] & 0x80) ? (!aValue) : aValue);
+  if (s == sRelay) {
+    if (aValue == aValue) {
+      if (aValue)
+        setRelay(true);
+      else
+        setRelay(false);
+    }
   }
-  else if ((s >= sVariable) && (s < sScriptMode)) {
-    variables[s - sVariable] = aValue;
-  }
+  else if (s == sVariable)
+    variables[0] = aValue;
+  else if (s == (sVariable + 1))
+    variables[1] = aValue;
 }
 
 void bk_print(float aValue) {
@@ -797,9 +816,9 @@ void bk_print(float aValue) {
       buf[5] = *((__uint8*)&aValue + 2);
       buf[6] = *((__uint8*)&aValue + 3);
 
-      signal_updatePtr(sDebug, buf, getUTCTime());
+      signal_updatePtr(sDebug, buf, 0);
       mgt_send(&client, sDebug);
-      signal_updatePtr(sDebug, debugArr, getUTCTime());
+      signal_updatePtr(sDebug, debugArr, 0);
     }
     sleepms(100);
   }
@@ -816,9 +835,9 @@ void bk_prints(const char* aStr) {
       buf[1] = (__uint8)(count >> 8);
       buf[2] = 0xfd;
 
-      signal_updatePtr(sDebug, buf, getUTCTime());
+      signal_updatePtr(sDebug, buf, 0);
       mgt_send(&client, sDebug);
-      signal_updatePtr(sDebug, debugArr, getUTCTime());
+      signal_updatePtr(sDebug, debugArr, 0);
     }
     sleepms(100);
   }
@@ -832,10 +851,11 @@ void bk_onBreak(__uint16 aPoint) {
     debugArr[3] = (__uint8)aPoint;
     debugArr[4] = *((__uint8*)&aPoint + 1);
 
-    signal_updatePtr(sDebug, debugArr, getUTCTime());
+    signal_updatePtr(sDebug, debugArr, 0);
     mgt_send(&client, sDebug);
   }
 }
+
 
 void myUpdate() {
   debugLog(F("Update sketch...\n"));

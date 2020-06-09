@@ -763,7 +763,7 @@ static struct Signal* findSignal(char* aName) {
     // добавим в кэш
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
-    s->m_value.m_time = -1; // пометим, что параметр не действителен (TODO не идеальное решение)
+    s->m_value.m_time = -1; // пометим, что параметр не действителен
   }
   
   return s;
