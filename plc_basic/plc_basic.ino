@@ -438,11 +438,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  char* ver = "PLC Sonoff Basic R1 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R1 v1.6 01/III/2020";
 #elif defined(BASIC_R2)
-  char* ver = "PLC Sonoff Basic R2 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R2 v1.6 01/III/2020";
 #elif defined(BASIC_R3)
-  char* ver = "PLC Sonoff Basic R3 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R3 v1.6 01/III/2020";
 #endif
 
 
