@@ -738,10 +738,8 @@ static struct Signal* findSignal(char* aName) {
 
 float bk_getSignal(char* aName, __uint16 aLifetime) {
   struct Signal* s = findSignal(aName);
-  if (!s) {
-    mgt_attachSignal(&client, aName);
+  if (!s)
     return NAN;
-  }
 
   int num = s - sDIO;
   if (num < 9) {
