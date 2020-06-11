@@ -377,14 +377,14 @@ void setup() {
   mgt_createSignal(&client, "stored_6", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_7", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_8", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
-  sVariable = mgt_createSignal(&client, "variable_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(5), 0);
-  mgt_createSignal(&client, "variable_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(6), 0);
-  mgt_createSignal(&client, "variable_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(7), 0);
-  mgt_createSignal(&client, "variable_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(8), 0);
-  mgt_createSignal(&client, "variable_5", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(9), 0);
-  mgt_createSignal(&client, "variable_6", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(10), 0);
-  mgt_createSignal(&client, "variable_7", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(11), 0);
-  mgt_createSignal(&client, "variable_8", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(12), 0);
+  sVariable = mgt_createSignal(&client, "variable_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(9), 0);
+  mgt_createSignal(&client, "variable_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(10), 0);
+  mgt_createSignal(&client, "variable_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(11), 0);
+  mgt_createSignal(&client, "variable_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(12), 0);
+  mgt_createSignal(&client, "variable_5", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(13), 0);
+  mgt_createSignal(&client, "variable_6", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(14), 0);
+  mgt_createSignal(&client, "variable_7", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(15), 0);
+  mgt_createSignal(&client, "variable_8", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, getRegMode(16), 0);
   sScriptMode = mgt_createSignal(&client, "scriptMode", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScript = mgt_createSignal(&client, "script", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sDebug = mgt_createSignal(&client, "debug", tpBlob, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
@@ -430,7 +430,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.1 02/VI/2020";
+  const char* ver = "PLC 8285 v0.2 12/VI/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);

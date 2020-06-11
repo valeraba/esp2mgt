@@ -31,7 +31,7 @@ struct NetConfig {
 };
 
 struct AppConfig {
-  uint16_t regMode[17]; //настройка регитрации
+  uint16_t regMode[17]; //настройка регистрации
   byte DIOMode[9]; // 0 - INPUT, 1 - OUTPUT, 2 - INPUT_PULLUP, 129 - OUTPUT_REVERSE
 
   bool scriptMode; // режим работы: 0 - ручной, 1 - работа по сценарию
