@@ -332,7 +332,7 @@ void tick() {
     if (but[i].butInfo == BUT_NONE) {
       if (but_get(but + i) == BUT_CLICK) {
         digitalWrite(pinRelays[i], !digitalRead(pinRelays[i]));
-        EC_config.app.scriptMode = 0; // ручной режим
+        //EC_config.app.scriptMode = 0; // ручной режим
       }
     }
   }
@@ -452,7 +452,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC Sonoff 4CH v2.2 08/VI/2020";
+  const char* ver = "PLC Sonoff 4CH v2.3 15/VI/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   signal_updatePtr(sScript, EC_config.app.script, 0);
