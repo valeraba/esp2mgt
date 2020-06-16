@@ -132,7 +132,6 @@ static void Loop() {
 
 static void Repeat() {
   float v = getFloat32(stack + SP + 4);
- // if (!v) {
   if (v < 1) {
     IP = getUint16(stack + SP + 2);
     SP += 4;
@@ -414,9 +413,9 @@ static void S_set() {
   __uint8* p = stack + SP;
   SP += 4;
   if ((p[2] == 0xaa) && (p[3] == 0xff)) {
-    //__uint16 adr = getUint16(p);
-    //char* str = (char*)code + adr;
-    // TODO
+    __uint16 adr = getUint16(p);
+    char* str = (char*)code + adr;
+	bk_setSignal(name, str);
   }
   else {
     float v = getFloat32(p);

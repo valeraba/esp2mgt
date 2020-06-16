@@ -192,17 +192,6 @@ void mainHandler(void) {
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
-  const char* relayState;
-  const char* relayCmd;
-  if (digitalRead(PIN_RELAY)) {
-    relayState = "включено";
-    relayCmd = "Выключить";
-  }
-  else {
-    relayState = "выключено";
-    relayCmd = "Включить";
-  }
-
   String out =
     F("<html>" "\r\n"
       "<head>" "\r\n"
@@ -217,10 +206,18 @@ void mainHandler(void) {
       "\t" "<li><a href='/login'>Выход</a></li>" "\r\n"
       "</ul>" "\r\n"
       "<h3>") EC_STR(mode) F("</h3>" "\r\n"
-      "<h3>Реле ") EC_STR(relayState) F("</h3>" "\r\n"
-      "<form action='/' method='POST'>" "\r\n"
-      "\t" "<input type='submit' name='relay' value='") EC_STR(relayCmd) F(" реле'>" "\r\n"
-      "</form>" "\r\n"
+      "<button onclick='unbind()'>Отвязать датчики</button>" "\r\n"
+
+      "<script>" "\r\n"
+      "\t" "function unbind() {" "\r\n"
+      "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
+      "\t\t" "xhr.open('POST', '/unbind');" "\r\n"
+      "\t\t" "xhr.onload = function() { alert('OK') };" "\r\n"
+      "\t\t" "xhr.onerror = function() { alert('ERROR') };" "\r\n"
+      "\t\t" "xhr.send();" "\r\n"
+      "\t" "}" "\r\n"
+      "</script>" "\r\n"
+
       "</body>" "\r\n"
       "</html>" "\r\n");
 
@@ -319,7 +316,11 @@ void getConfig() {
   server.send(200, "text/html", out);
 }
 
-
+// Удалить все привязки к датчикам
+static void unbindHandler() {
+    deleteSensor();
+    server.send(200, "text/html", "");
+}
 
 // Перезагрузка
 void rebootHandler(void) {
@@ -346,6 +347,7 @@ void HTTP_begin(void) {
   server.on("/", mainHandler);
   server.on("/config", HTTP_GET, getConfig);
   server.on("/config", HTTP_POST, setConfig);
+  server.on("/unbind", unbindHandler);
   server.on("/login", loginHandler);
   server.on("/reboot", rebootHandler);
   //server.onNotFound(notFoundHandler);

@@ -1,4 +1,4 @@
-#define COUNT_SIGNALS 34 // 14 + 20
+#define COUNT_SIGNALS 39 // 19 + 20
 #define COUNT_STORE 1
 #include "Types.h"
 #include "MgtClient.h"
@@ -12,12 +12,16 @@
 #include "http.h"
 #include "button.h"
 #include <Ticker.h>
+#include <OneWire.h>
+#include "DallasTemperature.h"
 
 #include "Telegram.h"
 
 #define PIN_BUTTON    0
-#define PIN_RELAY     12
 #define PIN_LED_MODE  13
+#define PIN_ONEWIRE  2
+#define PIN_DI  3
+
 
 
 struct MapNameItem {
@@ -49,6 +53,8 @@ void debugLog(const __FlashStringHelper* aFormat, ...) {
   va_end(args);
 }
 
+static struct Signal* sSensor; // sensor_1, sensor_2, sensor_3, sensor_4
+static struct Signal* sDI; // DI
 static struct Signal* sMessage; // message
 static struct Signal* sToken; // token
 static struct Signal* sChatId; // chatId
@@ -61,6 +67,15 @@ static struct Signal* sVersion; // version
 static struct Signal* sUpdate; // update
 
 static struct MgtClient client;
+
+static OneWire oneWire(PIN_ONEWIRE);
+static DallasTemperature sensors[4] = {
+  DallasTemperature(EC_config.app.romArr[0], &oneWire),
+  DallasTemperature(EC_config.app.romArr[1], &oneWire),
+  DallasTemperature(EC_config.app.romArr[2], &oneWire),
+  DallasTemperature(EC_config.app.romArr[3], &oneWire)
+};
+
 
 double updateChartId(double aChatId) {
   if (aChatId == aChatId) {
@@ -172,7 +187,7 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
       mgt_readAns(&client, aSignal, erOk);
       break;
     case opAttach:
-        break;
+      break;
     case opWrite:
       if (aSignal == sToken)
         write_token(aWriteValue->u.m_string);
@@ -218,9 +233,6 @@ void tick() {
   but_run(&but, t);
   if (but.butInfo == BUT_NONE) {
     if (but_get(&but) == BUT_CLICK) {
-      if (!EC_config.app.scriptMode)
-        digitalWrite(PIN_RELAY, !digitalRead(PIN_RELAY));
-      //EC_config.scriptMode = 0; // ручной режим
     }
   }
 }
@@ -260,6 +272,11 @@ void setup() {
   if (!mgt_init(&client, &deviceConfig, &mySocket))
     while (1);
 
+  sSensor = mgt_createSignal(&client, "sensor_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  mgt_createSignal(&client, "sensor_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  mgt_createSignal(&client, "sensor_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  mgt_createSignal(&client, "sensor_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  sDI = mgt_createSignal(&client, "DI", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sMessage = mgt_createSignal(&client, "message", tpString, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sToken = mgt_createSignal(&client, "token", tpString, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sChatId = mgt_createSignal(&client, "chatId", tpDouble, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
@@ -276,7 +293,22 @@ void setup() {
   sUpdate = mgt_createSignal(&client, "update", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
 
 
+  pinMode(PIN_DI, INPUT_PULLUP);
+
   but_init(&but, PIN_BUTTON, 2000);
+
+
+  delay(1); // разобъём долгую инициализацию
+  bool newFind = false;
+  for (int i = 0; i < 4; i++) {
+    if (EC_config.app.romArr[i][0] == 0) {
+      if (!sensors[i].search(EC_config.app.romArr, 4))
+        break;
+      newFind = true;
+    }
+  }
+  if (newFind)
+    EC_save(); // сохраним новые привязки
 
   for (int i = 0; i < 5; i++)
     signal_updateDouble(sStored + i, EC_config.app.stored[i], 0);
@@ -291,7 +323,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.23 11/III/2020";
+  const char* ver = "Telegram Bot v0.33 16/VI/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -372,28 +404,50 @@ void loop() {
   }
 
 
-  //  bool variableDirty[2] = {false, false};
+  bool temperatureDirty[4] = { false, false, false, false };
+  bool DIDirty = false;
   bool scriptModeDirty = false;
   msgDirty = false;
 
-  /* for (int i = 0; i < 2; i++) {
-     float v = sVariable[i].m_value.u.m_float;
-     if ((v == v) || (variables[i] == variables[i])) {
-       if (v != variables[i]) {
-         signal_update_double(sVariable + i, variables[i], t);
-         variableDirty[i] = true;
-       }
-     }
-    }*/
+  static __uint32 convertTime = 0;
+  static bool convertDone = false;
+
+  bool flagEvent = periodEvent(&_1_min, t);
 
 
-  if ((sScriptMode->m_value.u.m_bool == true) && (EC_config.app.scriptMode == false)) // если нажали на механическую кнопку
-    EC_save();
+  bool DI = digitalRead(PIN_DI); // читаем цифровой вход
+  if (flagEvent || (sDI->m_value.u.m_bool ^ DI)) {
+    signal_updateInt(sDI, DI, t);
+    DIDirty = true;
+  }
+
+
+  if ((__uint32)(millis() - convertTime) >= 800) {
+    bool errorRead = false;
+    if (convertDone) {
+      convertDone = false;
+      for (int i = 0; i < 4; i++) {
+        temperatureDirty[i] = sensors[i].read();
+        if (temperatureDirty[i]) {
+          signal_updateDouble(sSensor + i, sensors[i].value, t);
+          errorRead = true;
+        }
+      }
+    }
+    if (!errorRead) {
+      if (DallasTemperature::convertAll(&oneWire))
+        convertDone = true;
+      else
+        convertDone = false;
+    }
+    convertTime = millis();
+  }
+
 
   if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
     if (!bk_run())
       EC_config.app.scriptMode = false;
-	
+
   }
 
 
@@ -407,17 +461,29 @@ void loop() {
   if (!isAP) {
     MgtState mgtState = mgt_run(&client);
     if (mgtState == stConnected) {
+      for (int i = 0; i < 4; i++) {
+        if (temperatureDirty[i])
+          mgt_send(&client, sSensor + i);
+      }
+      if (DIDirty)
+        mgt_send(&client, sDI);
       if (scriptModeDirty)
         mgt_send(&client, sScriptMode);
-	  if (msgDirty)
-		  mgt_send(&client, sMessage);
-
-      if (periodEvent(&_1_min, t))
-        mgt_send(&client, sStored); // чтобы не спать
+      if (msgDirty)
+        mgt_send(&client, sMessage);
     }
     else if (mgtState == stEstablished) {
       TimeStamp t = getUTCTime();
 
+      for (int i = 0; i < 4; i++) {
+        if (temperatureDirty[i]) {
+          signal_updateTime(sSensor + i, t);
+          mgt_send(&client, sSensor + i);
+        }
+      }
+
+      signal_updateTime(sDI, t);
+      mgt_send(&client, sDI); // DI
       signal_updateTime(sScriptMode, t);
       mgt_send(&client, sScriptMode); // scriptMode
     }
@@ -439,7 +505,7 @@ void loop() {
   }
 
   if (msgDirty)
-	  tlgBot.sendMessage(msg);
+    tlgBot.sendMessage(msg);
 
 }
 
@@ -476,7 +542,7 @@ static struct Signal* findSignal(char* aName) {
       return mapSignalName[i].signal; // если нашли в кэше
   }
 
-  struct Signal* s = sMessage;
+  struct Signal* s = sSensor;
   for (int i = 0; i < COUNT_SIGNALS; i++) {
     if (s->m_name) {
       if (strcmp(s->m_name, aName) == 0) {
@@ -508,10 +574,10 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
     return NAN;
 
   if (s->m_value.m_time == -1)
-      return NAN;
+    return NAN;
 
   if (aLifetime) {
-    if (s > sUpdate) {
+    if ((s > sUpdate) || ((s >= sSensor) && (s < sDI))) {
       TimeStamp t = getUTCTime();
       if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
         return NAN;
@@ -523,46 +589,36 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
 }
 
 void joinMsg(const char* aStr) {
-	if (!msgDirty) // если это начало телеграммы
-		msg[0] = 0;
+  if (!msgDirty) // если это начало телеграммы
+    msg[0] = 0;
 
-	int len1 = strlen(msg);
-	int len2 = strlen(aStr);
-	int len = len1 + len2;
-	if (len <= 255) {
-		memcpy(msg + len1, aStr, len2);
-		msg[len] = 0;
-		msgDirty = true;
-	}
+  int len1 = strlen(msg);
+  int len2 = strlen(aStr);
+  int len = len1 + len2;
+  if (len <= 255) {
+    memcpy(msg + len1, aStr, len2);
+    msg[len] = 0;
+    msgDirty = true;
+  }
 }
 
 void bk_setSignal(char* aName, float aValue) {
-	struct Signal* s = findSignal(aName);
+  struct Signal* s = findSignal(aName);
 
-	if (s == sMessage) {
-		char buf[50];
-		snprintf(buf, sizeof(buf), "%.6g", aValue);
-		joinMsg(buf);
-	}
+  if (s == sMessage) {
+    char buf[50];
+    snprintf(buf, sizeof(buf), "%.6g", aValue);
+    joinMsg(buf);
+  }
 }
 
 void bk_setSignal(char* aName, const char* aStr) {
-	struct Signal* s = findSignal(aName);
+  struct Signal* s = findSignal(aName);
 
-	if (s == sMessage)
-		joinMsg(aStr);
+  if (s == sMessage)
+    joinMsg(aStr);
 }
-/*void bk_setSignal(char* aName, const char* aStr) {
-	struct Signal* s = findSignal(aName);
 
-	if (s == sMessage) {
-		tlgBot.sendMessage(aStr);
-		if (mgt_getState(&client) == stConnected) {
-			signal_update_ptr(sMessage, (void*)aStr, 0);
-			mgt_send(&client, sMessage);
-		}
-	}
-}*/
 
 
 void bk_print(float aValue) {

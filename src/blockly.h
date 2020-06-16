@@ -1,8 +1,3 @@
-/*
-Copyright © 2015, BVAgile. All rights reserved.
-Contacts: <bvagile@gmail.com>
-*/
-
 #ifndef _blockly_H_
 #define _blockly_H_
 
@@ -12,6 +7,7 @@ void bk_init(__uint8* aCode);
 bool bk_run();
 float bk_getSignal(char* aName, __uint16 aLifetime);
 void bk_setSignal(char* aName, float aValue);
+void bk_setSignal(char* aName, const char* aStr);
 void bk_print(float aValue);
 void bk_prints(const char* aStr);
 #define bk_millis millis

@@ -35,6 +35,7 @@ struct AppConfig {
   double chatId;
 
   float stored[5]; // параметры общего назначения  
+  byte romArr[4][8];
 
   bool scriptMode; // режим работы: 0 - ручной, 1 - работа по сценарию
   uint8_t script[3000]; // скрипт
