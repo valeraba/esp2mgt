@@ -331,7 +331,8 @@ void tick() {
     but_run(but + i, t);
     if (but[i].butInfo == BUT_NONE) {
       if (but_get(but + i) == BUT_CLICK) {
-        digitalWrite(pinRelays[i], !digitalRead(pinRelays[i]));
+        if (EC_config.app.scriptMode == 0) // ручной режим
+          digitalWrite(pinRelays[i], !digitalRead(pinRelays[i]));
         //EC_config.app.scriptMode = 0; // ручной режим
       }
     }
@@ -428,6 +429,7 @@ void setup() {
   signal_updateInt(sScriptMode, EC_config.app.scriptMode, 0);
 
   for (int i = 0; i < 4; i++) {
+    digitalWrite(pinRelays[i], 0);
     pinMode(pinRelays[i], OUTPUT);
     but_init(but + i, pinButtons[i], 2000);
 
@@ -452,7 +454,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC Sonoff 4CH v2.3 15/VI/2020";
+  const char* ver = "PLC Sonoff 4CH v2.4 16/VI/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   signal_updatePtr(sScript, EC_config.app.script, 0);
@@ -809,6 +811,9 @@ void bk_setSignal(char* aName, float aValue) {
   else if ((s >= sVariable) && (s < sReverse))
       variables[s - sVariable] = aValue;
 
+}
+
+void bk_setSignal(char* aName, const char* aStr) {
 }
 
 void bk_print(float aValue) {
