@@ -1,6 +1,6 @@
 /*
-Copyright © 2015, BVAgile. All rights reserved.
-Contacts: <bvagile@gmail.com>
+  Copyright © 2015, BVAgile. All rights reserved.
+  Contacts: <bvagile@gmail.com>
 */
 
 #define COUNT_SIGNALS 45 // 25 + 20
@@ -438,11 +438,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R1 v1.72 22/VI/2020";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R2 v1.72 22/VI/2020";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.6 01/III/2020";
+  const char* ver = "PLC Sonoff Basic R3 v1.72 22/VI/2020";
 #endif
 
 
@@ -475,12 +475,11 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 }
 
 struct Period _1_min = { 1L * 60 * 1000, 0 };
-//struct Period _801_ms = { 801, 0 };
+
+static bool synchronization = false;
 
 void loop() {
   static uint32_t ms2 = 0;
-
-  static bool synchronization = false;
 
 
   uint32_t ms = millis();
@@ -493,7 +492,7 @@ void loop() {
       }
       break;
     default:
-        break;
+      break;
   }
 
   if (ms < ms2 || (ms - ms2) > 500) {
@@ -546,7 +545,6 @@ void loop() {
     }
   }
 
-  //if (periodEvent(&_801_ms, t)) {
   if ((__uint32)(millis() - convertTime) >= 800) {
     bool errorRead = false;
     if (convertDone) {
@@ -772,7 +770,7 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
     return variables[1];
 
   if (s->m_value.m_time == -1)
-      return NAN;
+    return NAN;
 
   if (aLifetime) {
     if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
@@ -800,6 +798,9 @@ void bk_setSignal(char* aName, float aValue) {
     variables[0] = aValue;
   else if (s == (sVariable + 1))
     variables[1] = aValue;
+}
+
+void bk_setSignal(char* aName, const char* aStr) {
 }
 
 void bk_print(float aValue) {
@@ -839,6 +840,51 @@ void bk_prints(const char* aStr) {
     }
     sleepms(100);
   }
+}
+
+Time* m_clock = sch_getTime();
+
+float bk_getTime(__uint8 aOp) {
+  if (!synchronization)
+    return NAN;
+  float f;
+  switch (aOp) {
+    case 1:
+      f = m_clock->Hour * 3600 + m_clock->Minute * 60 + m_clock->Second;
+      break;
+    case 2:
+      f = m_clock->total_sec / 86400;
+      break;
+    case 3:
+      f = m_clock->Second;
+      break;
+    case 4:
+      f = m_clock->Minute;
+      break;
+    case 5:
+      f = m_clock->Hour;
+      break;
+    case 6: {
+        __uint8 wday = m_clock->Wday + 1;
+        if (wday == 7)
+          wday = 0;
+        f = wday;
+        break;
+      }
+    case 7:
+      f = m_clock->Day;
+      break;
+    case 8:
+      f = m_clock->Month;
+      break;
+    case 9:
+      f = m_clock->Year;
+      break;
+    default:
+      f = NAN;
+      break;
+  }
+  return f;
 }
 
 void bk_onBreak(__uint16 aPoint) {

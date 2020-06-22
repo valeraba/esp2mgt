@@ -39,4 +39,17 @@ __uint32 getStartEvent(__uint8 aIndex);
 __uint32 getStopEvent(__uint8 aIndex);
 
 
+struct Time {
+  __uint8 Second; // seconds after the minute (from 0)
+  __uint8 Minute; // minutes after the hour (from 0)
+  __uint8 Hour; // hour of the day (from 0)
+  __uint8 Wday; // day of week, sunday is day 1
+  __uint8 Day; // day of the month (from 1)
+  __uint8 Month; // month of the year (from 1)
+  __uint8 Year; // offset from 1970;
+  __uint32 total_sec; // количество секунд с 1970года 1 января 00:00:00 (локальное время)
+};
+
+Time* sch_getTime();
+
 #endif

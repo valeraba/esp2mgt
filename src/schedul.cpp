@@ -18,7 +18,7 @@ static TimeStamp last_time = 0; // UTC в миллисекундах
 bool canals[NUMBER_CANAL];
 
 
-struct Time {
+/*struct Time {
   __uint8 Second; // seconds after the minute (from 0)
   __uint8 Minute; // minutes after the hour (from 0)
   __uint8 Hour; // hour of the day (from 0)
@@ -27,7 +27,7 @@ struct Time {
   __uint8 Month; // month of the year (from 1)
   __uint8 Year; // offset from 1970;
   __uint32 total_sec; // количество секунд с 1970года 1 января 00:00:00 (локальное время)
-};
+};*/
 
 static struct Time tm;
 
@@ -215,3 +215,6 @@ void sch_run(TimeStamp aTime) {
   }
 }
 
+Time* sch_getTime() {
+  return &tm;
+}

@@ -458,6 +458,19 @@ static void Pause() {
   SP += 4;
 }
 
+static void Time() {
+    if (SP < 4) {
+        error = 1;
+        return;
+    }
+    SP -= 4;
+
+    __uint8 op = *(code + IP++);
+
+    float f = bk_getTime(op);
+    copy32(stack + SP, &f);
+}
+
 
 typedef void(*FuncCmd)();
 static FuncCmd cmdTable[] = { 0, Shift, // выход и сдвиг SP
@@ -468,7 +481,7 @@ Eq, Neq, Lt, Lte, Gt, Gte, // сравнение
 Je, Jne, Jmp, Call, Ret, // переходы и функции
 Loop, Repeat, For, For_arg, Continue, Break, // циклы
 Print, S_get, S_set, // дополнительные
-Delay, Pause // время
+Delay, Pause, Time // время
 };
 
 void bk_init(__uint8* aCode) {
@@ -520,7 +533,7 @@ bool bk_run() {
       }
       break;
     }
-    if (cmd > 37) {
+    if (cmd > 38) {
       error = true;
       isBreak = true;
       bk_prints("Code error!");

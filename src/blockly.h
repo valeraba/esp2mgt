@@ -10,6 +10,7 @@ void bk_setSignal(char* aName, float aValue);
 void bk_setSignal(char* aName, const char* aStr);
 void bk_print(float aValue);
 void bk_prints(const char* aStr);
+float bk_getTime(__uint8 aOp);
 #define bk_millis millis
 #define bk_delayMicroseconds delayMicroseconds
 
