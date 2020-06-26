@@ -1,5 +1,5 @@
 #define COUNT_SIGNALS 39 // 19 + 20
-#define COUNT_STORE 1
+#define COUNT_STORE 5
 #include "Types.h"
 #include "MgtClient.h"
 #include "blockly.h"
@@ -272,11 +272,11 @@ void setup() {
   if (!mgt_init(&client, &deviceConfig, &mySocket))
     while (1);
 
-  sSensor = mgt_createSignal(&client, "sensor_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "sensor_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "sensor_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  mgt_createSignal(&client, "sensor_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  sDI = mgt_createSignal(&client, "DI", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
+  sSensor = mgt_createSignal(&client, "sensor_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
+  mgt_createSignal(&client, "sensor_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
+  mgt_createSignal(&client, "sensor_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
+  mgt_createSignal(&client, "sensor_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_AVERAGE | STORE_UNIT_SEC | 15, 0);
+  sDI = mgt_createSignal(&client, "DI", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sMessage = mgt_createSignal(&client, "message", tpString, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sToken = mgt_createSignal(&client, "token", tpString, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sChatId = mgt_createSignal(&client, "chatId", tpDouble, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
@@ -323,7 +323,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.33 16/VI/2020";
+  const char* ver = "Telegram Bot v0.34 26/VI/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -619,8 +619,6 @@ void bk_setSignal(char* aName, const char* aStr) {
     joinMsg(aStr);
 }
 
-
-
 void bk_print(float aValue) {
   if (bk_debug) {
     if (mgt_getState(&client) == stConnected) {
@@ -658,6 +656,10 @@ void bk_prints(const char* aStr) {
     }
     sleepms(100);
   }
+}
+
+float bk_getTime(__uint8 aOp) {
+  return NAN;
 }
 
 void bk_onBreak(__uint16 aPoint) {
