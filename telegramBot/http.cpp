@@ -113,6 +113,7 @@ bool HTTP_isAuth() {
 char tempBuf[10];
 #define EC_STR(str) ;out+=(str);out+=
 #define EC_BYTE(b) ;sprintf(tempBuf,"%u",(b));out+=tempBuf;out+=
+#define EC_DOUBLE(d) ;sprintf(tempBuf,"%g",(d));out+=tempBuf;out+=
 #define EC_CHECK(b) ;if(b)out+="checked";out+=
 #define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%u",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
 
@@ -132,11 +133,13 @@ void loginHandler() {
     debugLog(F("Login Failed\n"));
   }
   else {
-    if (HTTP_isAuth()) {
-      debugLog(F("logout\n"));
-      String header = "HTTP/1.1 301 OK\r\nSet-Cookie: password=\r\nLocation: /login\r\nCache-Control: no-cache\r\n\r\n";
-      server.sendContent(header);
-      return;
+    if (EC_config.net.password[0]) { 
+      if (HTTP_isAuth()) {
+        debugLog(F("logout\n"));
+        String header = "HTTP/1.1 301 OK\r\nSet-Cookie: password=\r\nLocation: /login\r\nCache-Control: no-cache\r\n\r\n";
+        server.sendContent(header);
+        return;
+      }
     }
   }
 
@@ -179,19 +182,13 @@ void mainHandler(void) {
     return;
   }
 
-  // Сохранение контроллера
-  if (server.hasArg("relay")) {
-    bool val = digitalRead(PIN_RELAY);
-    digitalWrite(PIN_RELAY, !val);
-    //server.sendContent("HTTP/1.1 301 OK\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n");
-    server.sendContent("HTTP/1.1 303 See Other\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n");
-    return;
-  }
 
   const char* mode = "";
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
+  float timeZone = -((float)EC_config.app.bias / 3600);
+  
   String out =
     F("<html>" "\r\n"
       "<head>" "\r\n"
@@ -201,14 +198,39 @@ void mainHandler(void) {
       "</head>" "\r\n"
       "<body>" "\r\n"
       "<h1>") EC_STR(EC_config.net.name) F("</h1>" "\r\n"
+      "<h3>") EC_STR(mode) F("</h3>" "\r\n"
       "<ul>" "\r\n"
       "\t" "<li><a href='/config'>Настройка параметров сети</a></li>" "\r\n"
       "\t" "<li><a href='/login'>Выход</a></li>" "\r\n"
+      "\t" "<li><a href='/reboot'>Перезагрузка</a></li>" "\r\n"
       "</ul>" "\r\n"
-      "<h3>") EC_STR(mode) F("</h3>" "\r\n"
+      "\t" "<form name='config'>" "\r\n"
+      "\t\t" "<h3>Часовой пояс</h3>" "\r\n"
+      "\t\t" "<table>" "\r\n"
+      "\t\t\t" "<tr><td>GMT:</td><td><input name='zone' type='number' min='-12' max='12' value='") EC_DOUBLE(timeZone) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "</table>" "\r\n"
+      "\t\t" "<h3>Географические координаты</h3>" "\r\n"
+      "\t\t" "<table>" "\r\n"
+      "\t\t\t" "<tr><td>Широта:</td><td><input name='lat' type='number' min='-90' max='90' value='") EC_DOUBLE(EC_config.app.latitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t\t" "<tr><td>Долгота:</td><td><input name='lon' type='number' min='-180' max='180' value='") EC_DOUBLE(EC_config.app.longitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "</table>" "\r\n"
+      "\t" "</form>" "\r\n"
+      "\t" "<button onclick='setConfig()'>Сохранить</button>" "\r\n"
+      "\t" "<br>" "\r\n"
+      "\t" "<br>" "\r\n"
       "<button onclick='unbind()'>Отвязать датчики</button>" "\r\n"
 
       "<script>" "\r\n"
+
+      "\t" "function setConfig() {" "\r\n"
+      "\t\t" "var form = new FormData(document.forms.config);" "\r\n"
+      "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
+      "\t\t" "xhr.open('POST', '/appConfig');" "\r\n"
+      "\t\t" "xhr.onload = function() { alert('OK') };" "\r\n"
+      "\t\t" "xhr.onerror = function() { alert('ERROR') };" "\r\n"
+      "\t\t" "xhr.send(form);" "\r\n"
+      "\t" "}" "\r\n"
+
       "\t" "function unbind() {" "\r\n"
       "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
       "\t\t" "xhr.open('POST', '/unbind');" "\r\n"
@@ -224,6 +246,19 @@ void mainHandler(void) {
   server.send ( 200, "text/html", out );
 }
 
+//-------------------------------------------------
+void appConfigHandler() {
+    // Проверка прав администратора
+    if (!HTTP_isAuth())
+        return;
+
+    if (server.hasArg("zone")) EC_config.app.bias = -(atof(server.arg("zone").c_str()) * 3600);
+    if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());
+    if (server.hasArg("lon")) EC_config.app.longitude = atof(server.arg("lon").c_str());
+    EC_save();
+
+    server.send(200, "text/html", "");
+}
 
 //-------------------------------------------------
 void setConfig() {
@@ -285,7 +320,7 @@ void getConfig() {
       "\t\t" "<li><a href='/login'>Выход</a></li>" "\r\n"
       "\t\t" "<li><a href='/reboot'>Перезагрузка</a></li>" "\r\n"
       "\t" "</ul>" "\r\n"
-      "\t" "<form action='/config'method='POST'>" "\r\n"
+      "\t" "<form action='/config' method='POST'>" "\r\n"
       "\t\t" "<h3>Параметры в режиме точки доступа</h3>" "\r\n"
       "\t\t" "<table>" "\r\n"
       "\t\t\t" "<tr><td>Название:</td><td><input name='name' value='") EC_STR(EC_config.net.name) F("' size=32 length=32></td></tr>" "\r\n"
@@ -347,6 +382,7 @@ void HTTP_begin(void) {
   server.on("/", mainHandler);
   server.on("/config", HTTP_GET, getConfig);
   server.on("/config", HTTP_POST, setConfig);
+  server.on("/appConfig", appConfigHandler);
   server.on("/unbind", unbindHandler);
   server.on("/login", loginHandler);
   server.on("/reboot", rebootHandler);

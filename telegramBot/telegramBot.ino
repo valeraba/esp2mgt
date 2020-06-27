@@ -2,6 +2,7 @@
 #define COUNT_STORE 5
 #include "Types.h"
 #include "MgtClient.h"
+#include "schedul.h"
 #include "blockly.h"
 
 #include "ESP8266_Board.h"
@@ -323,7 +324,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.34 26/VI/2020";
+  const char* ver = "Telegram Bot v0.35 27/VI/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -350,6 +351,7 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 
 struct Period _5_sec = { 1L * 5 * 1000, 0 };
 struct Period _1_min = { 1L * 60 * 1000, 0 };
+static bool synchronization = false;
 
 
 void sendStartAns() {
@@ -443,6 +445,8 @@ void loop() {
     convertTime = millis();
   }
 
+  if (synchronization)
+    sch_run(t);
 
   if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
     if (!bk_run())
@@ -474,6 +478,8 @@ void loop() {
     }
     else if (mgtState == stEstablished) {
       TimeStamp t = getUTCTime();
+      sch_init(t);
+      synchronization = true;
 
       for (int i = 0; i < 4; i++) {
         if (temperatureDirty[i]) {
@@ -509,6 +515,21 @@ void loop() {
 
 }
 
+__int32 getBias() {
+  return EC_config.app.bias;
+}
+
+__uint8 getEventInfo(__uint8 aIndex) {
+    return 0x80;
+}
+
+__uint32 getStartEvent(__uint8 aIndex) {
+    return 0;
+}
+
+__uint32 getStopEvent(__uint8 aIndex) {
+    return 0;
+}
 
 static float convertToFloat(struct Signal* aSignal) {
   switch (aSignal->st.m_type) {
@@ -658,8 +679,49 @@ void bk_prints(const char* aStr) {
   }
 }
 
+Time* m_clock = sch_getTime();
+
 float bk_getTime(__uint8 aOp) {
-  return NAN;
+  if (!synchronization)
+    return NAN;
+  float f;
+  switch (aOp) {
+    case 1:
+      f = m_clock->Hour * 3600 + m_clock->Minute * 60 + m_clock->Second;
+      break;
+    case 2:
+      f = m_clock->total_sec / 86400;
+      break;
+    case 3:
+      f = m_clock->Second;
+      break;
+    case 4:
+      f = m_clock->Minute;
+      break;
+    case 5:
+      f = m_clock->Hour;
+      break;
+    case 6: {
+        __uint8 wday = m_clock->Wday + 1;
+        if (wday == 7)
+          wday = 0;
+        f = wday;
+        break;
+      }
+    case 7:
+      f = m_clock->Day;
+      break;
+    case 8:
+      f = m_clock->Month;
+      break;
+    case 9:
+      f = m_clock->Year;
+      break;
+    default:
+      f = NAN;
+      break;
+  }
+  return f;
 }
 
 void bk_onBreak(__uint16 aPoint) {

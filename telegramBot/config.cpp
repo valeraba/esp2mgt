@@ -62,6 +62,10 @@ static void app_default(void) {
 
   for (int i = 0; i < 5; i++)
     EC_config.app.stored[i] = 0;
+
+  EC_config.app.bias = 0;
+  EC_config.app.latitude = 0;
+  EC_config.app.longitude = 0;  
 }
 
 static uint32_t net_crc(void) {
