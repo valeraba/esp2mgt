@@ -1,3 +1,8 @@
+/*
+Copyright © 2015, BVAgile. All rights reserved.
+Contacts: <bvagile@gmail.com>
+*/
+
 #include "http.h"
 #include "config.h"
 

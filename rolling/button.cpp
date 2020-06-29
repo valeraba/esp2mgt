@@ -1,3 +1,8 @@
+/*
+Copyright © 2015, BVAgile. All rights reserved.
+Contacts: <bvagile@gmail.com>
+*/
+
 #include "arduino.h"
 #include "button.h"
 
@@ -63,5 +68,3 @@ But_info but_get(But_ctx* aBut) {
   } 
   return aBut->butInfo; 
 }
-
-
