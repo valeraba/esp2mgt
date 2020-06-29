@@ -1,12 +1,10 @@
-/**
-* Прошивка SONOFF TH10/16
-* Copyright (C) 2016 Алексей Шихарбеев
-* http://samopal.pro
+/*
+Copyright © 2015, BVAgile. All rights reserved.
+Contacts: <bvagile@gmail.com>
 */
 
-
-#ifndef WS_HTTP_h
-#define WS_HTTP_h
+#ifndef _http_H_
+#define _http_H_
 
 #include <ESP8266WebServer.h>
 

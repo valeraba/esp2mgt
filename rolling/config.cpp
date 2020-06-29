@@ -4,7 +4,7 @@ Contacts: <bvagile@gmail.com>
 */
 
 #include "Types.h"
-#include "WC_EEPROM.h"
+#include "config.h"
 #include <EEPROM.h>
 
 void debugLog(const __FlashStringHelper* aFormat, ...);

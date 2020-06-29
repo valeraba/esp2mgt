@@ -1,8 +1,3 @@
-/*
-Copyright © 2015, BVAgile. All rights reserved.
-Contacts: <bvagile@gmail.com>
-*/
-
 #ifndef _button_H_
 #define _button_H_
 
@@ -24,9 +19,10 @@ struct But_ctx {
   uint8_t flag;
   uint32_t changeTime; // время изменения состояния
   But_info butInfo;
+  bool invert;
 };
 
-void but_init(But_ctx* aBut, int aPin, uint16_t aTimeLongDown);
+void but_init(But_ctx* aBut, int aPin, uint16_t aTimeLongDown, bool aInvert);
 void but_run(But_ctx* aBut, uint32_t aTime); // запускать циклически раз в 10 - 25 мс
 But_info but_get(But_ctx* aBut); // чтение состояния кнопки
 

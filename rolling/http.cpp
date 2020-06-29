@@ -1,5 +1,5 @@
-#include "WC_HTTP.h"
-#include "WC_EEPROM.h"
+#include "http.h"
+#include "config.h"
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 char localIp[16] = {0};
@@ -61,7 +61,7 @@ void WiFi_begin(void) {
     // Получаем статический IP если нужно
     isConnect = ConnectWiFi();
     if (isConnect) {
-      if (EC_config.net.ip != 0 && !EC_config.net.dhcp)
+      if (EC_config.net.ip != (uint32_t)0 && !EC_config.net.dhcp)
         WiFi.config(EC_config.net.ip, EC_config.net.gw, EC_config.net.msk);
       debugLog(F("Open http://"));
       strncpy (localIp, WiFi.localIP().toString().c_str(), 16);
@@ -107,13 +107,13 @@ bool HTTP_isAuth() {
 
 char tempBuf[10];
 #define EC_STR(str) ;out+=(str);out+=
-#define EC_INT(b) ;sprintf(tempBuf,"%lu",(b));out+=tempBuf;out+=
+#define EC_BYTE(b) ;sprintf(tempBuf,"%u",(b));out+=tempBuf;out+=
 #define EC_CHECK(b) ;if(b)out+="checked";out+=
-#define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%lu",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
+#define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%u",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
 
 // Страница авторизации
 void loginHandler() {
-  char* msg = "";
+  const char* msg = "";
   if (server.hasArg("password")) {
     String password = server.arg("password");
 
@@ -167,7 +167,6 @@ void HTTP_gotoLogin() {
 
 // Оработчик главной страницы сервера
 void mainHandler(void) {
-  char str[10];
   // Проверка авторизации
 
   if (!HTTP_isAuth()) {
@@ -184,12 +183,12 @@ void mainHandler(void) {
     return;
   }
 
-  char* mode = "";
+  const char* mode = "";
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
-  char* relayState;
-  char* relayCmd;
+  const char* relayState;
+  const char* relayCmd;
   if (digitalRead(PIN_RELAY)) {
     relayState = "включено";
     relayCmd = "Выключить";
@@ -227,7 +226,6 @@ void mainHandler(void) {
 //-------------------------------------------------
 void setConfig() {
   // Проверка прав администратора
-  char s[65];
   if (!HTTP_isAuth()) {
     //TODO
     return;
@@ -263,7 +261,6 @@ void setConfig() {
 //-------------------------------------------------
 void getConfig() {
   // Проверка прав администратора
-  char s[65];
   if (!HTTP_isAuth()) {
     HTTP_gotoLogin();
     return;
@@ -298,9 +295,9 @@ void getConfig() {
       "\t\t" "<table>" "\r\n"
       "\t\t\t" "<tr><td>Имя сети:</td><td><input name='ssid' value='") EC_STR(EC_config.net.ssid) F("' size=32 length=32></td></tr>" "\r\n"
       "\t\t\t" "<tr><td>Пароль:</td><td><input name='pass' value='") EC_STR(EC_config.net.pass) F("' size=32 length=32 type='password'></td></tr>" "\r\n"
-      "\t\t\t" "<tr class='trIp'><td>IP-адрес:</td><td><input name='ip0' value='") EC_INT(EC_config.net.ip[0]) F("' size=3 length=3> . <input name='ip1' value='") EC_INT(EC_config.net.ip[1]) F("' size=3 length=3> . <input name='ip2' value='") EC_INT(EC_config.net.ip[2]) F("' size=3 length=3> . <input name='ip3' value='") EC_INT(EC_config.net.ip[3]) F("' size=3 length=3></td></tr>" "\r\n"
-      "\t\t\t" "<tr class='trIp'><td>IP-маска:</td><td><input name='msk0' value='") EC_INT(EC_config.net.msk[0]) F("' size=3 length=3> . <input name='msk1' value='") EC_INT(EC_config.net.msk[1]) F("' size=3 length=3> . <input name='msk2' value='") EC_INT(EC_config.net.msk[2]) F("' size=3 length=3> . <input name='msk3' value='") EC_INT(EC_config.net.msk[3]) F("' size=3 length=3></td></tr>" "\r\n"
-      "\t\t\t" "<tr class='trIp'><td>IP-шлюз:</td><td><input name='gw0' value='") EC_INT(EC_config.net.gw[0]) F("' size=3 length=3> . <input name='gw1' value='") EC_INT(EC_config.net.gw[1]) F("' size=3 length=3> . <input name='gw2' value='") EC_INT(EC_config.net.gw[2]) F("' size=3 length=3> . <input name='gw3' value='") EC_INT(EC_config.net.gw[3]) F("' size=3 length=3></td></tr>" "\r\n"
+      "\t\t\t" "<tr class='trIp'><td>IP-адрес:</td><td><input name='ip0' value='") EC_BYTE(EC_config.net.ip[0]) F("' size=3 length=3> . <input name='ip1' value='") EC_BYTE(EC_config.net.ip[1]) F("' size=3 length=3> . <input name='ip2' value='") EC_BYTE(EC_config.net.ip[2]) F("' size=3 length=3> . <input name='ip3' value='") EC_BYTE(EC_config.net.ip[3]) F("' size=3 length=3></td></tr>" "\r\n"
+      "\t\t\t" "<tr class='trIp'><td>IP-маска:</td><td><input name='msk0' value='") EC_BYTE(EC_config.net.msk[0]) F("' size=3 length=3> . <input name='msk1' value='") EC_BYTE(EC_config.net.msk[1]) F("' size=3 length=3> . <input name='msk2' value='") EC_BYTE(EC_config.net.msk[2]) F("' size=3 length=3> . <input name='msk3' value='") EC_BYTE(EC_config.net.msk[3]) F("' size=3 length=3></td></tr>" "\r\n"
+      "\t\t\t" "<tr class='trIp'><td>IP-шлюз:</td><td><input name='gw0' value='") EC_BYTE(EC_config.net.gw[0]) F("' size=3 length=3> . <input name='gw1' value='") EC_BYTE(EC_config.net.gw[1]) F("' size=3 length=3> . <input name='gw2' value='") EC_BYTE(EC_config.net.gw[2]) F("' size=3 length=3> . <input name='gw3' value='") EC_BYTE(EC_config.net.gw[3]) F("' size=3 length=3></td></tr>" "\r\n"
       "\t\t" "</table>" "\r\n"
       "\t\t" "<h3>Подключение к MGT серверу</h3>" "\r\n"
       "\t\t" "<table>" "\r\n"

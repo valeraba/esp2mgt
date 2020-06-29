@@ -3,8 +3,8 @@ Copyright © 2015, BVAgile. All rights reserved.
 Contacts: <bvagile@gmail.com>
 */
 
-#ifndef WC_EEPROM_h
-#define WC_EEPROM_h
+#ifndef _config_H_
+#define _config_H_
 #include <ESP8266WiFi.h>
 
 extern struct ECConfig EC_config;

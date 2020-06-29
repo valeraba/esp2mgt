@@ -3,7 +3,7 @@ Copyright © 2015, BVAgile. All rights reserved.
 Contacts: <bvagile@gmail.com>
 */
 
-#include "schedule.h"
+#include "schedul2.h"
 #include "string.h"
 
 //#define LEAP_YEAR(Y)     ( ((1970+(Y))>0) && !((1970+(Y))%4) && ( ((1970+(Y))%100) || !((1970+(Y))%400) ) )
@@ -18,7 +18,7 @@ static TimeStamp last_time = 0; // UTC в миллисекундах
 __int8 canals[NUMBER_CANAL];
 
 
-struct Time {
+/*struct Time {
 	__uint8 Second; // seconds after the minute (from 0)
 	__uint8 Minute; // minutes after the hour (from 0)
 	__uint8 Hour; // hour of the day (from 0)
@@ -27,7 +27,7 @@ struct Time {
 	__uint8 Month; // month of the year (from 1)
 	__uint8 Year; // offset from 1970;
 	__uint32 total_sec; // количество секунд с 1970года 1 января 00:00:00 (локальное время)
-};
+};*/
 
 static struct Time tm;
 
@@ -203,75 +203,6 @@ void sch_run(TimeStamp aTime) {
 	}
 }
 
-/*
-void sch_run(TimeStamp aTime) {
-	if ((last_time <= aTime) && (aTime < (last_time + 1000))) // если не наступила новая секунда и время не откатилось назад
-		return;
-
-	if ((aTime < 31536000000) || (aTime > 4102444800000)) // 1 января 1971 - 1 января 2100
-		return;
-
-	TimeStamp t = aTime / 1000; // переведём в секунды
-	last_time = t * 1000; // сохраним последнее время
-
-	t -= getBias(); // переведём в локальное время
-
-	if (!go_time((__uint32)t)) // если время увеличилось НЕ на одну на секунду
-		set_time((__uint32)t);
-
-
-	//---------------------------------
-	char flags[NUMBER_CANAL];
-	char old_periods[NUMBER_CANAL];
-
-	memset(flags, 0, NUMBER_CANAL);
-	memset(old_periods, 0, NUMBER_CANAL);
-	memset(canals, false, NUMBER_CANAL);
-
-	for (unsigned char i = 0; i < 255; i++) {
-		unsigned char eventInfo = getEventInfo(i);
-		if (eventInfo & 0x80)
-			break;
-
-		//----------------------------------
-		bool state;
-		bool non_reverse = true;
-		__int64 current_base;
-		__uint32 start;
-		__uint32 stop;
-
-		current_base = base[eventInfo & 0x07];
-
-		start = getStartEvent(i);
-		stop = getStopEvent(i);
-
-		if (stop < start) {
-			__uint32 temp = start;
-			start = stop;
-			stop = temp;
-			non_reverse = false; // время перевёрнуто
-		}
-
-		state = ((tm.total_sec >= (current_base + start)) && (tm.total_sec < (current_base + stop))) ? true : false;
-
-		//----------------------------------
-
-
-		__uint8 canal = eventInfo >> 3;
-
-		if ((flags[canal] == true) || (eventInfo >= old_periods[canal])) {
-			if (state) {      // Если текущее событие активно - канал устанавливается, и программа ищет следующее по порядку событие.
-				flags[canal] = non_reverse;  // Если такого события не находиться, программа выходит из алгоритма
-				canals[canal] = non_reverse;
-			}
-			else {
-				flags[canal] = false;
-				if (eventInfo < old_periods[canal]) // Если текущее событие неактивно - канал очищается в том случае, если предыдущее
-					canals[canal] = false;             // событие было с большей периодичностью. Далее программа ищет следующее событие,
-													   // с периодичностью равной или большей периодичности текущего события.
-			}                                          // Если такого события не находиться, программа выходит из алгоритма.
-			old_periods[canal] = eventInfo;
-		}
-	}
+Time* sch_getTime() {
+	return &tm;
 }
-*/

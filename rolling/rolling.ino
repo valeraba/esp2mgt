@@ -1,16 +1,16 @@
-#define COUNT_SIGNALS 36 // 16 + 20
-#define COUNT_STORE 2
+#define COUNT_SIGNALS 37 // 17 + 20
+#define COUNT_STORE 3
 #include "Types.h"
 #include "MgtClient.h"
-#include "schedule.h"
+#include "schedul2.h"
 #include "blockly.h"
 
 #include "ESP8266_Board.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266httpUpdate.h>
 
-#include "WC_EEPROM.h"
-#include "WC_HTTP.h"
+#include "config.h"
+#include "http.h"
 #include "button.h"
 #include <Ticker.h>
 
@@ -28,6 +28,8 @@
 //#define PIN_RELAY     12
 #define PIN_LED_MODE    13
 #define PIN_RELAY_2      5
+
+#define PIN_DI  3
 
 struct MapNameItem {
   char* name;
@@ -55,6 +57,7 @@ void debugLog(const __FlashStringHelper* aFormat, ...) {
   va_end(args);
 }
 
+static struct Signal* sDI; // DI
 static struct Signal* sUp; // up
 static struct Signal* sDown; // down
 static struct Signal* sSetup; // setup
@@ -149,7 +152,7 @@ bool rollClose(__uint32 aTime) {
   } 
 }
 
-bool presetPosition(__int8 aPercent) { 
+void presetPosition(__int8 aPercent) { 
   float f = EC_config.app.rollHalfCycle;
   f /= 100;
   f *= aPercent;
@@ -202,7 +205,7 @@ static void write_up(bool aValue) {
       return;
     }
     else {
-      signal_update_int(sSetup, 100, getUTCTime());
+      signal_updateInt(sSetup, 100, getUTCTime());
       mgt_send(&client, sSetup);
     }
   }
@@ -215,7 +218,7 @@ static void write_up(bool aValue) {
     }
   }
   
-  signal_update_int(sUp, aValue, getUTCTime());
+  signal_updateInt(sUp, aValue, getUTCTime());
   mgt_writeAns(&client, sUp, erOk);
 }
 
@@ -233,7 +236,7 @@ static void write_down(bool aValue) {
       return;
     }
     else {
-      signal_update_int(sSetup, 0, getUTCTime());
+      signal_updateInt(sSetup, 0, getUTCTime());
       mgt_send(&client, sSetup);
     }
   }
@@ -246,17 +249,17 @@ static void write_down(bool aValue) {
     }
   }
  
-  signal_update_int(sDown, aValue, getUTCTime());
+  signal_updateInt(sDown, aValue, getUTCTime());
   mgt_writeAns(&client, sDown, erOk);
 }
 
 // asynchronous writes without confirmation for "setup"
 static void writeAsync_sSetup(__int8 aValue) {
   if (autoPosition != -128)
-    signal_update_int(sSetup, autoPosition, getUTCTime());
+    signal_updateInt(sSetup, autoPosition, getUTCTime());
   else {
     setPosition(aValue);
-    signal_update_int(sSetup, aValue, getUTCTime());
+    signal_updateInt(sSetup, aValue, getUTCTime());
   }
   mgt_send(&client, sSetup);
 }
@@ -271,7 +274,7 @@ static void write_halfCycle(float aValue) {
       rollPositionSetup = EC_config.app.rollHalfCycle;
     
     EC_save();
-    signal_update_double(sHalfCycle, aValue, getUTCTime());
+    signal_updateDouble(sHalfCycle, aValue, getUTCTime());
     mgt_writeAns(&client, sHalfCycle, erOk);
   }
   else
@@ -341,7 +344,7 @@ static void readScheduleData(int aNumber) {
   *(EC_config.app.scheduleData + begin - 2) = *((__uint8*)&bias + 0);
   *(EC_config.app.scheduleData + begin - 1) = *((__uint8*)&bias + 1);
 
-  signal_update_ptr(sScheduleData + aNumber, EC_config.app.scheduleData + begin - 4, getUTCTime());
+  signal_updatePtr(sScheduleData + aNumber, EC_config.app.scheduleData + begin - 4, getUTCTime());
   mgt_readAns(&client, sScheduleData + aNumber, erOk);
 
   *(EC_config.app.scheduleData + begin - 4) = temp[0];
@@ -358,11 +361,11 @@ static void write_autoMode(bool aValue) {
 
   TimeStamp t = getUTCTime();
   
-  signal_update_int(sAutoMode, aValue, t);
+  signal_updateInt(sAutoMode, aValue, t);
   mgt_writeAns(&client, sAutoMode, erOk); // confirmation
 
   if (sScriptMode->m_value.u.m_bool) {
-    signal_update_int(sScriptMode, false, t);
+    signal_updateInt(sScriptMode, false, t);
     mgt_send(&client, sScriptMode);
   }
 }
@@ -374,11 +377,11 @@ static void write_scriptMode(bool aValue) {
 
   TimeStamp t = getUTCTime();
   
-  signal_update_int(sScriptMode, aValue, t);
+  signal_updateInt(sScriptMode, aValue, t);
   mgt_writeAns(&client, sScriptMode, erOk); // confirmation
 
   if (sAutoMode->m_value.u.m_bool) {
-    signal_update_int(sAutoMode, false, t);
+    signal_updateInt(sAutoMode, false, t);
     mgt_send(&client, sAutoMode);
   }
 }
@@ -388,7 +391,7 @@ static void write_led(bool aValue) {
   EC_config.app.led = aValue;
   EC_save();
   
-  signal_update_int(sLed, aValue, getUTCTime());
+  signal_updateInt(sLed, aValue, getUTCTime());
   mgt_writeAns(&client, sLed, erOk); // confirmation
 }
 
@@ -450,6 +453,8 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
       signal_updateTime(aSignal, getUTCTime());
       mgt_readAns(&client, aSignal, erOk);
     }
+    break;
+  case opAttach:
     break;
   case opWrite:
     if (aSignal == sUp)
@@ -573,6 +578,8 @@ void setup() {
   Serial.begin(115200);
   debugLog(F("\n\nFree memory %d\n"), ESP.getFreeHeap());
 
+  pinMode(PIN_DI, INPUT_PULLUP);
+
   // Инициализация EEPROM
   EC_begin();
   EC_read();
@@ -600,6 +607,7 @@ void setup() {
   if (!mgt_init(&client, &deviceConfig, &mySocket))
     while(1);
 
+  sDI = mgt_createSignal(&client, "DI", tpBool, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sUp = mgt_createSignal(&client, "up", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sDown = mgt_createSignal(&client, "down", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_CHANGE | STORE_UNIT_MIN | 1, 0);
   sSetup = mgt_createSignal(&client, "setup", tpInt8, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_ASYNC_WRITE, STORE_MODE_OFF, 0);
@@ -626,12 +634,12 @@ void setup() {
   but_init(&but_up, PIN_BUTTON_UP, 1200, false);
   but_init(&but_down, PIN_BUTTON_DOWN, 1200, false);
 
-  signal_update_double(sHalfCycle, (float)EC_config.app.rollHalfCycle/1000, 0);
-  signal_update_int(sAutoMode, (EC_config.app.mode == 1), 0);
-  signal_update_int(sScriptMode, (EC_config.app.mode == 2), 0);
-  signal_update_int(sLed, EC_config.app.led, 0);
-  signal_update_int(sPosition, EC_config.app.position, 0);
-  signal_update_int(sSetup, EC_config.app.position, 0);
+  signal_updateDouble(sHalfCycle, (float)EC_config.app.rollHalfCycle/1000, 0);
+  signal_updateInt(sAutoMode, (EC_config.app.mode == 1), 0);
+  signal_updateInt(sScriptMode, (EC_config.app.mode == 2), 0);
+  signal_updateInt(sLed, EC_config.app.led, 0);
+  signal_updateInt(sPosition, EC_config.app.position, 0);
+  signal_updateInt(sSetup, EC_config.app.position, 0);
   presetPosition(EC_config.app.position);
 
   if (EC_config.app.position <= 0)
@@ -641,13 +649,13 @@ void setup() {
   else  
     rollState = roll_NONE;
   
-  signal_update_ptr(sIPAddress, localIp, 0);
+  signal_updatePtr(sIPAddress, localIp, 0);
   
-  char* ver = "Rolling Sonoff v1.8 30/I/2020";
-  signal_update_ptr(sVersion, ver, 0);
+  const char* ver = "Rolling Sonoff v1.9 29/VI/2020";
+  signal_updatePtr(sVersion, ver, 0);
 
-  signal_update_ptr(sScript, EC_config.app.script, 0);
-  signal_update_ptr(sDebug, debugArr, 0);
+  signal_updatePtr(sScript, EC_config.app.script, 0);
+  signal_updatePtr(sDebug, debugArr, 0);
 
   bk_init(EC_config.app.script + 2);
   mgt_start(&client, EC_config.net.host1);
@@ -671,13 +679,10 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 
 struct Period _1_min = { 1L * 60 * 1000, 0 };
 struct Period _200_ms = { 200, 0 };
+static bool synchronization = false;
 
 void loop() {
-  static uint32_t ms1 = 0;
   static uint32_t ms2 = 0;
-
-  static bool synchronization = false;
-
 
   uint32_t ms = millis();
   switch (but_get(&but)) {
@@ -713,6 +718,7 @@ void loop() {
 
   TimeStamp t = getUTCTime();
 
+  bool DIDirty = false;
   bool upDirty = false;
   bool downDirty = false;
   bool setupDirty = false;
@@ -720,13 +726,21 @@ void loop() {
   bool positionDirty = false;
   bool scheduleDirty = false;
 
+  bool flagEvent = periodEvent(&_1_min, t);
+
+  bool DI = digitalRead(PIN_DI); // читаем цифровой вход
+  if (flagEvent || (sDI->m_value.u.m_bool ^ DI)) {
+      signal_updateInt(sDI, DI, t);
+      DIDirty = true;
+  }
+
   autoPosition = -128; 
 
   if (synchronization) {
     sch_run(t);
     if (sSchedule->m_value.u.m_float != canals[0]) {
       if ((sSchedule->m_value.u.m_float == sSchedule->m_value.u.m_float) || (canals[0] != -128)) {
-        signal_update_double(sSchedule, (canals[0] == -128) ? NAN : canals[0], t);
+        signal_updateDouble(sSchedule, (canals[0] == -128) ? NAN : canals[0], t);
         scheduleDirty = true;
       }
     }
@@ -747,29 +761,27 @@ void loop() {
     }
   }
 
-  bool flagEvent = periodEvent(&_1_min, t);
-
   bool isMove = (rollState == roll_UP);
   if (flagEvent || (sUp->m_value.u.m_bool ^ isMove)) {
-    signal_update_int(sUp, isMove, t);
+    signal_updateInt(sUp, isMove, t);
     upDirty = true;
   }
   
   isMove = (rollState == roll_DOWN);
   if (flagEvent || (sDown->m_value.u.m_bool ^ isMove)) {
-    signal_update_int(sDown, isMove, t);
+    signal_updateInt(sDown, isMove, t);
     downDirty = true;
   }
 
   if (sState->m_value.u.m_uint8 != rollState) {
-    signal_update_int(sState, rollState, t);
+    signal_updateInt(sState, rollState, t);
     stateDirty = true;
   }
 
   if (periodEvent(&_200_ms, t)) {
     __int8 pos = getPosition();
     if (sPosition->m_value.u.m_int8 != pos) { 
-      signal_update_int(sPosition, pos, t);
+      signal_updateInt(sPosition, pos, t);
       positionDirty = true;
     }
 
@@ -783,7 +795,7 @@ void loop() {
     if (!getMove()) {
       if (sSetup->m_value.u.m_int8 != pos) {
         if ( (__uint32)(ms - timeRelayOn) > 1000) { // 1000мс  пауза между открытием и закрытием
-          signal_update_int(sSetup, pos, t);
+          signal_updateInt(sSetup, pos, t);
           setupDirty = true;
         }
       }    
@@ -795,6 +807,8 @@ void loop() {
 
   MgtState mgtState = mgt_run(&client);
   if (mgtState == stConnected) {
+    if (DIDirty)
+      mgt_send(&client, sDI);
     if (upDirty)
       mgt_send(&client, sUp);
     if (downDirty)
@@ -814,6 +828,8 @@ void loop() {
       synchronization = true;
 
       // всё то, что может измениться
+      signal_updateTime(sDI, t);
+      mgt_send(&client, sDI);
       signal_updateTime(sUp, t);
       mgt_send(&client, sUp);
       signal_updateTime(sDown, t);
@@ -919,7 +935,7 @@ static struct Signal* findSignal(char* aName) {
       return mapSignalName[i].signal; // если нашли в кэше
   }
 
-  struct Signal* s = sUp;
+  struct Signal* s = sDI;
   for (int i = 0; i < COUNT_SIGNALS; i++) {
     if (s->m_name) {
       if (strcmp(s->m_name, aName) == 0) {
@@ -938,6 +954,7 @@ static struct Signal* findSignal(char* aName) {
     // добавим в кэш
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
+    s->m_value.m_time = -1; // пометим, что параметр не действителен
   }
 
   return s;
@@ -953,6 +970,9 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
 
   if ((s == sSetup) && (autoPosition != -128))
       return autoPosition;
+
+  if (s->m_value.m_time == -1)
+      return NAN;
 
   if (aLifetime) {
     if (s > sUpdate) {
@@ -981,6 +1001,9 @@ void bk_setSignal(char* aName, float aValue) {
   }
 }
 
+void bk_setSignal(char* aName, const char* aStr) {
+}
+
 void bk_print(float aValue) {
   if (bk_debug) {
     if (mgt_getState(&client) == stConnected) {
@@ -993,12 +1016,57 @@ void bk_print(float aValue) {
       buf[5] = *((__uint8*)&aValue + 2);
       buf[6] = *((__uint8*)&aValue + 3);
 
-      signal_update_ptr(sDebug, buf, 0);
+      signal_updatePtr(sDebug, buf, 0);
       mgt_send(&client, sDebug);
-      signal_update_ptr(sDebug, debugArr, 0);
+      signal_updatePtr(sDebug, debugArr, 0);
     }
     sleepms(100);
   }
+}
+
+Time* m_clock = sch_getTime();
+
+float bk_getTime(__uint8 aOp) {
+    if (!synchronization)
+        return NAN;
+    float f;
+    switch (aOp) {
+    case 1:
+        f = m_clock->Hour * 3600 + m_clock->Minute * 60 + m_clock->Second;
+        break;
+    case 2:
+        f = m_clock->total_sec / 86400;
+        break;
+    case 3:
+        f = m_clock->Second;
+        break;
+    case 4:
+        f = m_clock->Minute;
+        break;
+    case 5:
+        f = m_clock->Hour;
+        break;
+    case 6: {
+        __uint8 wday = m_clock->Wday + 1;
+        if (wday == 7)
+            wday = 0;
+        f = wday;
+        break;
+    }
+    case 7:
+        f = m_clock->Day;
+        break;
+    case 8:
+        f = m_clock->Month;
+        break;
+    case 9:
+        f = m_clock->Year;
+        break;
+    default:
+        f = NAN;
+        break;
+    }
+    return f;
 }
 
 void bk_prints(const char* aStr) {
@@ -1011,9 +1079,9 @@ void bk_prints(const char* aStr) {
       buf[1] = (__uint8)(count >> 8);
       buf[2] = 0xfd;
 
-      signal_update_ptr(sDebug, buf, 0);
+      signal_updatePtr(sDebug, buf, 0);
       mgt_send(&client, sDebug);
-      signal_update_ptr(sDebug, debugArr, 0);
+      signal_updatePtr(sDebug, debugArr, 0);
     }
     sleepms(100);
   }
@@ -1027,7 +1095,7 @@ void bk_onBreak(__uint16 aPoint) {
     debugArr[3] = (__uint8)aPoint;
     debugArr[4] = *((__uint8*)&aPoint + 1);
 
-    signal_update_ptr(sDebug, debugArr, 0);
+    signal_updatePtr(sDebug, debugArr, 0);
     mgt_send(&client, sDebug);
   }
 }

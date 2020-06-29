@@ -1,12 +1,7 @@
-/*
-Copyright © 2015, BVAgile. All rights reserved.
-Contacts: <bvagile@gmail.com>
-*/
-
 #include "arduino.h"
 #include "button.h"
 
-void but_init(But_ctx* aBut, int aPin, uint16_t aTimeLongDown) {
+void but_init(But_ctx* aBut, int aPin, uint16_t aTimeLongDown, bool aInvert) {
   pinMode(aPin, INPUT_PULLUP);
   aBut->pin = aPin;
   aBut->timeLongDown = aTimeLongDown;
@@ -16,10 +11,11 @@ void but_init(But_ctx* aBut, int aPin, uint16_t aTimeLongDown) {
   aBut->flag = 0;
   aBut->changeTime = 0; // время изменения состояния
   aBut->butInfo = BUT_NONE;
+  aBut->invert = aInvert;
 }
 
 void but_run(But_ctx* aBut, uint32_t aTime) {
-  bool state = !digitalRead(aBut->pin);
+  bool state = digitalRead(aBut->pin) ^ aBut->invert;
   if (state)
     aBut->sampless |= 1 << aBut->idx;
   else
@@ -67,3 +63,5 @@ But_info but_get(But_ctx* aBut) {
   } 
   return aBut->butInfo; 
 }
+
+
