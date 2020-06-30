@@ -430,7 +430,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.2 12/VI/2020";
+  const char* ver = "PLC 8285 v0.3 30/VI/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -462,11 +462,10 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 
 struct Period _1_min = { 1L * 60 * 1000, 0 };
 struct Period _1_sec = { 1L * 1000, 0 };
+static bool synchronization = false;
 
 void loop() {
   static uint32_t ms2 = 0;
-
-  static bool synchronization = false;
 
   uint32_t ms = millis();
   switch (but_get(&but)) {
@@ -783,6 +782,9 @@ void bk_setSignal(char* aName, float aValue) {
   }
 }
 
+void bk_setSignal(char* aName, const char* aStr) {
+}
+
 void bk_print(float aValue) {
   if (bk_debug) {
     if (mgt_getState(&client) == stConnected) {
@@ -820,6 +822,51 @@ void bk_prints(const char* aStr) {
     }
     sleepms(100);
   }
+}
+
+Time* m_clock = sch_getTime();
+
+float bk_getTime(__uint8 aOp) {
+  if (!synchronization)
+    return NAN;
+  float f;
+  switch (aOp) {
+    case 1:
+      f = m_clock->Hour * 3600 + m_clock->Minute * 60 + m_clock->Second;
+      break;
+    case 2:
+      f = m_clock->total_sec / 86400;
+      break;
+    case 3:
+      f = m_clock->Second;
+      break;
+    case 4:
+      f = m_clock->Minute;
+      break;
+    case 5:
+      f = m_clock->Hour;
+      break;
+    case 6: {
+        __uint8 wday = m_clock->Wday + 1;
+        if (wday == 7)
+          wday = 0;
+        f = wday;
+        break;
+      }
+    case 7:
+      f = m_clock->Day;
+      break;
+    case 8:
+      f = m_clock->Month;
+      break;
+    case 9:
+      f = m_clock->Year;
+      break;
+    default:
+      f = NAN;
+      break;
+  }
+  return f;
 }
 
 void bk_onBreak(__uint16 aPoint) {

@@ -135,11 +135,13 @@ void loginHandler() {
     debugLog(F("Login Failed\n"));
   }
   else {
-    if (HTTP_isAuth()) {
-      debugLog(F("logout\n"));
-      String header = "HTTP/1.1 301 OK\r\nSet-Cookie: password=\r\nLocation: /login\r\nCache-Control: no-cache\r\n\r\n";
-      server.sendContent(header);
-      return;
+    if (EC_config.net.password[0]) {
+      if (HTTP_isAuth()) {
+        debugLog(F("logout\n"));
+        String header = "HTTP/1.1 301 OK\r\nSet-Cookie: password=\r\nLocation: /login\r\nCache-Control: no-cache\r\n\r\n";
+        server.sendContent(header);
+        return;
+      }
     }
   }
 
