@@ -1,36 +1,49 @@
 #include "solarTime.h"
 
-static float lat;
-static float lon;
-static int timezone;
+static float lat = 0;
+static float lon = 0;
+static __int32 timezone = 0;
 
-static __uint8 lastDay = 0;
-static __uint8 lastMonth = 0;
+static __uint8 lastDay_1 = 0;
+static __uint8 lastMonth_1 = 0;
+static __uint8 lastDay_2 = 0;
+static __uint8 lastMonth_2 = 0;
 
 static float sunrise = NAN;
 static float sunset = NAN;
 
-void solarInit(float aLatitude, float aLongitude, int aTimezone) {
+void solarInit(float aLatitude, float aLongitude, __int32 aTimezone) {
   lat = aLatitude / 57.295779513082322;
   lon = -aLongitude / 57.295779513082322;
-  timezone = aTimezone;
+  timezone = -aTimezone;
+  lastDay_1 = 0;
+  lastMonth_1 = 0;
+  lastDay_2 = 0;
+  lastMonth_2 = 0;
 }
 
 float solarCompute(__uint8 aDay, __uint8 aMonth, bool aRs) {
-    float y, decl, eqt, ha, lon, lat;
+    float y, decl, eqt, ha;
     __uint8 a;
     int seconds;
 
-
-    if ((lastDay == aDay) && (lastMonth == aMonth)) {
-      if (aRs)
+    if (aRs) {
+      if ((lastDay_1 == aDay) && (lastMonth_1 == aMonth))
         return sunrise;
-      else
+      else {
+        lastDay_1 = aDay;
+        lastMonth_1 = aMonth;                
+      }     
+    }
+    else {
+      if ((lastDay_2 == aDay) && (lastMonth_2 == aMonth))
         return sunset;
+      else {
+        lastDay_2 = aDay;
+        lastMonth_2 = aMonth;                
+      }     
     }
     
-    lastDay = aDay;
-    lastMonth = aMonth;
     
     aMonth--;
     aDay--;
@@ -69,6 +82,8 @@ float solarCompute(__uint8 aDay, __uint8 aMonth, bool aRs) {
 
     seconds = seconds * 60 + timezone;
     seconds = seconds % 86400;
+    if (seconds < 0)
+      seconds += 86400;
  
     if (aRs)
       sunrise = seconds;

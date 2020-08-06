@@ -148,7 +148,7 @@ void loginHandler() {
     F("<html>" "\r\n"
       "<head>" "\r\n"
       "\t" "<meta charset='utf-8'/>" "\r\n"
-      "\t" "<title>Sonoff TH10/TH16</title>" "\r\n"
+      "\t" "<title>") EC_STR(EC_config.net.name) F("</title>" "\r\n"
       "\t" "<style>body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; } input {width:250px; height:28px}</style>" "\r\n"
       "</head>" "\r\n"
       "<body>" "\r\n"
