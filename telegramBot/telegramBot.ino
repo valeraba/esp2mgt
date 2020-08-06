@@ -17,6 +17,7 @@
 #include "DallasTemperature.h"
 
 #include "Telegram.h"
+#include "solarTime.h"
 
 #define PIN_BUTTON    0
 #define PIN_LED_MODE  13
@@ -246,6 +247,8 @@ void setup() {
   // Инициализация EEPROM
   EC_begin();
   EC_read();
+
+  solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
 
   // Подключаемся к WiFi
   WiFi_begin();
@@ -681,6 +684,7 @@ void bk_prints(const char* aStr) {
 
 Time* m_clock = sch_getTime();
 
+
 float bk_getTime(__uint8 aOp) {
   if (!synchronization)
     return NAN;
@@ -717,6 +721,12 @@ float bk_getTime(__uint8 aOp) {
     case 9:
       f = m_clock->Year;
       break;
+    case 10: // sunrise
+      f = solarCompute(m_clock->Day, m_clock->Month, true);
+      break;
+    case 11: // sunset
+      f = solarCompute(m_clock->Day, m_clock->Month, false);
+      break;    
     default:
       f = NAN;
       break;

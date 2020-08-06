@@ -5,6 +5,7 @@ Contacts: <bvagile@gmail.com>
 
 #include "http.h"
 #include "config.h"
+#include "solarTime.h"
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 char localIp[16] = { 0 };
@@ -256,6 +257,8 @@ void appConfigHandler() {
     if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());
     if (server.hasArg("lon")) EC_config.app.longitude = atof(server.arg("lon").c_str());
     EC_save();
+
+    solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
 
     server.send(200, "text/html", "");
 }

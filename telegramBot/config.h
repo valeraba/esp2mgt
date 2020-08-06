@@ -40,7 +40,7 @@ struct AppConfig {
   bool scriptMode; // режим работы: 0 - ручной, 1 - работа по сценарию
   uint8_t script[3000]; // скрипт
 
-  int32_t bias; // сдвиг в минутах относительно GMT
+  int32_t bias; // сдвиг в секундах относительно GMT
   double latitude; // широта
   double longitude; // долгота
 };
