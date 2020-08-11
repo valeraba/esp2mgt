@@ -1,4 +1,4 @@
-#define COUNT_SIGNALS 39 // 19 + 20
+#define COUNT_SIGNALS 41 // 21 + 20
 #define COUNT_STORE 5
 #include "Types.h"
 #include "MgtClient.h"
@@ -61,6 +61,7 @@ static struct Signal* sMessage; // message
 static struct Signal* sToken; // token
 static struct Signal* sChatId; // chatId
 static struct Signal* sStored; // stored_1, stored_2, stored_3, stored_4, stored_5
+static struct Signal* sVariable; // variable_1, variable_2
 static struct Signal* sScriptMode; // scriptMode
 static struct Signal* sScript; // script
 static struct Signal* sDebug; // debug
@@ -69,6 +70,8 @@ static struct Signal* sVersion; // version
 static struct Signal* sUpdate; // update
 
 static struct MgtClient client;
+
+float variables[2] = { NAN, NAN };
 
 static OneWire oneWire(PIN_ONEWIRE);
 static DallasTemperature sensors[4] = {
@@ -121,6 +124,13 @@ static void write_stored(int aNumber, float aValue) {
   EC_save();
   signal_updateDouble(sStored + aNumber, aValue, getUTCTime());
   mgt_writeAns(&client, sStored + aNumber, erOk); // confirmation
+}
+
+// write with confirmation for "variable"
+static void write_variable(int aNumber, float aValue) {
+  variables[aNumber] = aValue;
+  signal_updateDouble(sVariable + aNumber, aValue, getUTCTime());
+  mgt_writeAns(&client, sVariable + aNumber, erOk); // confirmation
 }
 
 // write with confirmation for "scriptMode"
@@ -195,8 +205,10 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
         write_token(aWriteValue->u.m_string);
       else if (aSignal == sChatId)
         write_chatId(aWriteValue->u.m_double);
-      else if ((aSignal >= sStored) && (aSignal < sScriptMode))
+      else if ((aSignal >= sStored) && (aSignal < sVariable))
         write_stored(aSignal - sStored, aWriteValue->u.m_float);
+      else if ((aSignal >= sVariable) && (aSignal < sScriptMode))
+        write_variable(aSignal - sVariable, aWriteValue->u.m_float);
       else if (aSignal == sScriptMode)
         write_scriptMode(aWriteValue->u.m_bool);
       else if (aSignal == sScript)
@@ -289,6 +301,8 @@ void setup() {
   mgt_createSignal(&client, "stored_3", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_4", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   mgt_createSignal(&client, "stored_5", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  sVariable = mgt_createSignal(&client, "variable_1", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  mgt_createSignal(&client, "variable_2", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScriptMode = mgt_createSignal(&client, "scriptMode", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sScript = mgt_createSignal(&client, "script", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sDebug = mgt_createSignal(&client, "debug", tpBlob, SEC_LEV_NO_ACCESS | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
@@ -300,7 +314,6 @@ void setup() {
   pinMode(PIN_DI, INPUT_PULLUP);
 
   but_init(&but, PIN_BUTTON, 2000);
-
 
   delay(1); // разобъём долгую инициализацию
   bool newFind = false;
@@ -316,6 +329,9 @@ void setup() {
 
   for (int i = 0; i < 5; i++)
     signal_updateDouble(sStored + i, EC_config.app.stored[i], 0);
+  for (int i = 0; i < 2; i++)
+    signal_updateDouble(sVariable + i, variables[i], 0);
+
 
   msg[0] = 0;
   signal_updatePtr(sMessage, msg, 0);
@@ -327,7 +343,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.40 06/VIII/2020";
+  const char* ver = "Telegram Bot v0.41 11/VIII/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -410,6 +426,7 @@ void loop() {
 
 
   bool temperatureDirty[4] = { false, false, false, false };
+  bool variableDirty[2] = {false, false};
   bool DIDirty = false;
   bool scriptModeDirty = false;
   msgDirty = false;
@@ -454,8 +471,18 @@ void loop() {
   if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
     if (!bk_run())
       EC_config.app.scriptMode = false;
-
   }
+
+  for (int i = 0; i < 2; i++) {
+    float v = sVariable[i].m_value.u.m_float;
+    if ((v == v) || (variables[i] == variables[i])) { // NAN отправляется только по изменению
+      if (flagEvent || (v != variables[i])) {
+        signal_updateDouble(sVariable + i, variables[i], t);
+        variableDirty[i] = true;
+      }
+    }
+  }
+
 
 
   if (sScriptMode->m_value.u.m_bool ^ EC_config.app.scriptMode) {
@@ -472,6 +499,11 @@ void loop() {
         if (temperatureDirty[i])
           mgt_send(&client, sSensor + i);
       }
+      for (int i = 0; i < 2; i++) {
+        if (variableDirty[i])
+          mgt_send(&client, sVariable + i);
+      }
+
       if (DIDirty)
         mgt_send(&client, sDI);
       if (scriptModeDirty)
@@ -488,6 +520,12 @@ void loop() {
         if (temperatureDirty[i]) {
           signal_updateTime(sSensor + i, t);
           mgt_send(&client, sSensor + i);
+        }
+      }
+      for (int i = 0; i < 2; i++) {
+        if (variables[i] == variables[i]) { // NAN не будем отправлять (хотя клиенты могут его вычитать), чтобы не инициировать архивирование параметра
+          signal_updateTime(sVariable + i, t);
+          mgt_send(&client, sVariable + i); // variable
         }
       }
 
@@ -600,6 +638,9 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
   if (s->m_value.m_time == -1)
     return NAN;
 
+  if ((s >= sVariable) && (s < sScriptMode))
+    return variables[s - sVariable];
+
   if (aLifetime) {
     if ((s > sUpdate) || ((s >= sSensor) && (s < sDI))) {
       TimeStamp t = getUTCTime();
@@ -634,6 +675,9 @@ void bk_setSignal(char* aName, float aValue) {
     snprintf(buf, sizeof(buf), "%.6g", aValue);
     joinMsg(buf);
   }
+  else if ((s >= sVariable) && (s < sScriptMode))
+    variables[s - sVariable] = aValue;
+
 }
 
 void bk_setSignal(char* aName, const char* aStr) {
