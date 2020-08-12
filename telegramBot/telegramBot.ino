@@ -343,7 +343,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.41 11/VIII/2020";
+  const char* ver = "Telegram Bot v0.42 12/VIII/2020";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -763,7 +763,7 @@ float bk_getTime(__uint8 aOp) {
       f = m_clock->Month;
       break;
     case 9:
-      f = m_clock->Year;
+      f = m_clock->Year + 1970;
       break;
     case 10: // sunrise
       f = solarCompute(m_clock->Day, m_clock->Month, true);
