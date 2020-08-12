@@ -878,7 +878,7 @@ float bk_getTime(__uint8 aOp) {
       f = m_clock->Month;
       break;
     case 9:
-      f = m_clock->Year;
+      f = m_clock->Year + 1970;
       break;
     default:
       f = NAN;
