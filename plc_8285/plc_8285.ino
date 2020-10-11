@@ -324,11 +324,11 @@ void setup() {
   EC_begin();
   EC_read();
 
-  // Подключаемся к WiFi
+  /*/ Подключаемся к WiFi
   WiFi_begin();
   if (WiFi.status() == WL_CONNECTED) blink_mode = 0B11111111;
   else blink_mode = 0B00000101;
-  delay(2000);
+  delay(2000);*/
 
   // Старт внутреннего WEB-сервера
   HTTP_begin();
@@ -405,9 +405,11 @@ void setup() {
   for (int i = 0; i < 4; i++)
     signal_updateDouble(sSensor + i, NAN, t);
 
+  analogWriteFreq(100); // частота ШИМ
+
   for (int i = 0; i < 9; i++) {
     digitalWrite(pinDIO[i], (EC_config.app.DIOMode[i] & 0x80) ? true : false);
-    pinMode(pinDIO[i], EC_config.app.DIOMode[i] & 0x7f);
+    pinMode(pinDIO[i], EC_config.app.DIOMode[i] & 0x0f);
   }
 
   //pinMode(pinDIO[4], INPUT_PULLUP); // RX
@@ -430,7 +432,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.3 30/VI/2020";
+  const char* ver = "PLC 8285 v0.44 10/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -483,7 +485,8 @@ void loop() {
   if (ms < ms2 || (ms - ms2) > 500) {
     ms2 = ms;
     if (isAP == false) {
-      if (WiFi.status() == WL_CONNECTED)
+      //if (WiFi.status() == WL_CONNECTED)
+      if (isWiFiConnected())
         blink_mode = 0B11111111;
       else {
         blink_mode = 0B00000101;
@@ -774,8 +777,13 @@ void bk_setSignal(char* aName, float aValue) {
   struct Signal* s = findSignal(aName);
   int num = s - sDIO;
   if (num < 9) {
-    if (aValue == aValue)
-      digitalWrite(pinDIO[num], (EC_config.app.DIOMode[num] & 0x80) ? (!aValue) : aValue);
+    if (aValue == aValue) {
+      __uint8 mode = EC_config.app.DIOMode[num];
+      if (mode & 0x10)
+        analogWrite(pinDIO[num], aValue);
+      else  
+        digitalWrite(pinDIO[num], (mode & 0x80) ? (!aValue) : aValue);
+    }
   }
   else if ((s >= sVariable) && (s < sScriptMode)) {
     variables[s - sVariable] = aValue;

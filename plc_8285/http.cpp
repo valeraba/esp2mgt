@@ -20,7 +20,6 @@ int    UID       = -1;
 
 //---Соединение с WiFi----------
 static bool ConnectWiFi(void) {
-
   // Если WiFi не сконфигурирован
   if (strcmp(EC_config.net.ssid, "none") == 0) {
     debugLog(F("WiFi is not config ...\n"));
@@ -33,7 +32,10 @@ static bool ConnectWiFi(void) {
   // Пытаемся соединиться с точкой доступа
   debugLog(F("\nConnecting to: %s\n"), EC_config.net.ssid);
   WiFi.begin(EC_config.net.ssid, EC_config.net.pass);
-  delay(1000);
+
+//  delay(1000);
+  
+/*  delay(1000);
 
   // Максиммум N раз проверка соединения (12 секунд)
   for ( int j = 0; j < 15; j++ ) {
@@ -50,7 +52,19 @@ static bool ConnectWiFi(void) {
     //Serial.print(WiFi.status());
   }
   debugLog(F("\nConnect WiFi failed ...\n"));
-  return false;
+  return false;*/
+
+  return true;
+}
+
+static uint32_t time_wifi_connect = 0;
+
+bool isWiFiConnected() {
+  if (WiFi.status() != WL_CONNECTED)
+    return false;
+  if (time_wifi_connect != 0)
+    return false;
+  return true;    
 }
 
 //-------Старт WiFi---------
@@ -61,19 +75,38 @@ void WiFi_begin(void) {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(EC_config.net.name, EC_config.net.password);
     debugLog(F("Open http://192.168.4.1 in your browser\n"));
+    time_wifi_connect = 0;
   }
   else {
-    // Получаем статический IP если нужно
-    WiFi.mode(WIFI_STA);
-    isConnect = ConnectWiFi();
-    if (isConnect) {
-      if (EC_config.net.ip != (uint32_t)0 && !EC_config.net.dhcp)
-        WiFi.config(EC_config.net.ip, EC_config.net.gw, EC_config.net.msk);
+    if (time_wifi_connect == 0) {
+      WiFi.mode(WIFI_STA);
+      if (ConnectWiFi()) {
+        time_wifi_connect = millis();
+        if (time_wifi_connect == 0)
+          time_wifi_connect = 1; // значение 0 используется для маркировки конца задержки 
+      }
+      return;
+    }
+    
+
+    //if (isConnect) {
+    if (WiFi.status() == WL_CONNECTED) {
+//      delay(1000);
+      time_wifi_connect = 0;     
+      if (EC_config.net.ip != (uint32_t)0 && !EC_config.net.dhcp) // Получаем статический IP если нужно
+        WiFi.config(EC_config.net.ip, EC_config.net.gw, EC_config.net.msk); 
       debugLog(F("Open http://"));
       strncpy (localIp, WiFi.localIP().toString().c_str(), 16);
       debugLog(F("%s"), localIp);
       debugLog(F(" in your browser"));
     }
+    else {
+      uint32_t t = millis();  
+      if ((uint32_t)(t - time_wifi_connect) > 15000) // 15 секунд
+        time_wifi_connect = 0;
+      delay(1000);     
+    }
+    
   }
 }
 
@@ -297,6 +330,7 @@ void mainHandler(void) {
       "\t\t\t" "createOption('129', 'Выход (инверсный)', el);" "\r\n"
       "\t\t\t" "createOption('3', 'Выход открытый коллектор', el);" "\r\n"
       "\t\t\t" "createOption('131', 'Выход открытый коллектор (инверсный)', el);" "\r\n"
+      "\t\t\t" "createOption('17', 'Выход ШИМ', el);" "\r\n"
       "\t\t\t" "setDiv.appendChild(el);" "\r\n"
       "\t\t" "}" "\r\n"
 

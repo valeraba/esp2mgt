@@ -13,6 +13,7 @@ static __uint16 txInd = 0;
 
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
+bool isWiFiConnected();
 
 extern const char* WIFI_SSID;
 extern const char* WIFI_PASSWORD;
@@ -40,7 +41,8 @@ void sleepms(__uint32 aMilliseconds) {
 }
 
 static bool socket_open(const char* aHost, __uint16 aPort) {
-  if (WiFi.status() != WL_CONNECTED)
+  //if (WiFi.status() != WL_CONNECTED)
+  if (!isWiFiConnected())
     return false;
   debugLog(F("socket open, host: %s, port: %i\n"), aHost, aPort);
 

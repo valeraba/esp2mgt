@@ -11,6 +11,7 @@ Contacts: <bvagile@gmail.com>
 extern bool isAP;
 extern bool relay_on;
 
+bool isWiFiConnected();
 void WiFi_begin(void);
 void HTTP_begin(void);
 void HTTP_loop();
