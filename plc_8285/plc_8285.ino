@@ -432,7 +432,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.5 15/X/2020";
+  const char* ver = "PLC 8285 v0.6 19/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -464,7 +464,10 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 
 struct Period _1_min = { 1L * 60 * 1000, 0 };
 struct Period _1_sec = { 1L * 1000, 0 };
+
 static bool synchronization = false;
+
+static TimeStamp disconnectTime = 0; // время последней попытки подключения
 
 void loop() {
   static uint32_t ms2 = 0;
@@ -579,6 +582,28 @@ void loop() {
 
     static bool toggleServer = false;
 
+
+    if (disconnectTime) {
+      if ((t - disconnectTime) >= 120000) { // две минуты
+        disconnectTime = 0;
+        if (strlen(EC_config.net.host2)) {
+          if (toggleServer) {
+            toggleServer = false;
+            mgt_start(&client, EC_config.net.host1);
+            debugLog(F("start %s\n"), EC_config.net.host1);
+          }
+          else {
+            toggleServer = true;
+            mgt_start(&client, EC_config.net.host2);
+            debugLog(F("start %s\n"), EC_config.net.host2);
+          }
+        }
+      }
+      else
+        return;
+    }
+    
+      
     MgtState mgtState = mgt_run(&client);
     if (mgtState == stConnected) {
       for (int i = 0; i < 4; i++) {
@@ -629,7 +654,11 @@ void loop() {
       mgt_send(&client, sScriptMode); // scriptMode
     }
     else if (mgtState == stDisconnect) {
-      if (strlen(EC_config.net.host2)) {
+      disconnectTime = t;
+      if (strlen(EC_config.net.host2))
+        mgt_stop(&client, 0);
+      
+/*      if (strlen(EC_config.net.host2)) {
         mgt_stop(&client, 0);
         if (toggleServer) {
           toggleServer = false;
@@ -641,7 +670,8 @@ void loop() {
           mgt_start(&client, EC_config.net.host2);
           debugLog(F("start %s\n"), EC_config.net.host2);
         }
-      }
+      }*/
+      
     }
 
   }
