@@ -104,7 +104,7 @@ void WiFi_begin(void) {
       uint32_t t = millis();  
       if ((uint32_t)(t - time_wifi_connect) > 15000) // 15 секунд
         time_wifi_connect = 0;
-      delay(1000);     
+      delay(2000);     
     }
     
   }

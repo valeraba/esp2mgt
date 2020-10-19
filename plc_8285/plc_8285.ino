@@ -405,7 +405,7 @@ void setup() {
   for (int i = 0; i < 4; i++)
     signal_updateDouble(sSensor + i, NAN, t);
 
-  analogWriteFreq(100); // частота ШИМ
+  analogWriteFreq(1000); // частота ШИМ
 
   for (int i = 0; i < 9; i++) {
     digitalWrite(pinDIO[i], (EC_config.app.DIOMode[i] & 0x80) ? true : false);
@@ -432,7 +432,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.44 10/X/2020";
+  const char* ver = "PLC 8285 v0.5 15/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
