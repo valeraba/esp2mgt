@@ -41,7 +41,7 @@ const char* WIFI_PASSWORD = EC_config.net.pass;
 extern struct PortableSocket mySocket;
 
 Ticker ticker;
-static bool script_lock = false;
+bool script_lock = false;
 
 
 uint8_t blink_mode = 0B00000101;
@@ -439,7 +439,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.7 26/X/2020";
+  const char* ver = "PLC 8285 v0.73 26/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -611,8 +611,8 @@ void loop() {
           }
         }
         else {
-          WiFi_begin();
           script_lock = false;
+          WiFi_begin();
           return;
         }
       }

@@ -17,6 +17,8 @@ bool isWiFiConnected();
 
 extern const char* WIFI_SSID;
 extern const char* WIFI_PASSWORD;
+extern bool script_lock;
+
 
 TimeStamp shiftTime;
 
@@ -46,10 +48,14 @@ static bool socket_open(const char* aHost, __uint16 aPort) {
     return false;
   debugLog(F("socket open, host: %s, port: %i\n"), aHost, aPort);
 
+  script_lock = false;
   if (!socket.connect(aHost, aPort)) {
+    script_lock = true;
     debugLog(F("socket connection failed\n"));
     return false;
   }
+  script_lock = true;
+  
   txInd = 0;
   isConnected = true;
   socket.setNoDelay(true);
@@ -67,6 +73,7 @@ static void socket_close() {
 
 static bool socket_send(const void* aBuf, __uint16 aSize) {
   const __uint8* data = (const __uint8*)aBuf;
+  script_lock = false;
 
   __uint16 len;
   if (aSize) {
@@ -83,6 +90,7 @@ static bool socket_send(const void* aBuf, __uint16 aSize) {
     if (!socket.connected()) {
       debugLog(F("socket send error\n"));
       socket_close();
+      script_lock = true;
       return false;
     }
     __uint32 availableSize = socket.availableForWrite();
@@ -90,12 +98,14 @@ static bool socket_send(const void* aBuf, __uint16 aSize) {
       if ((__uint32)(millis() - op_start_time) > 5000) {
         debugLog(F("socket send wait error\n"));
         socket_close();
+        script_lock = true;
         return false;          
       }            
-      if (aSize) { // если входной буфер ещё не освободили
+      if (aSize) { // если входной буфер ещё не освободили       
         delay(10);
         continue;
       }
+      script_lock = true;
       return true; // остатки передадим позже
     }
     if (availableSize > txInd)
@@ -106,6 +116,7 @@ static bool socket_send(const void* aBuf, __uint16 aSize) {
     if (writtenSize <= 0) {
       debugLog(F("socket send error\n"));
       socket_close();
+      script_lock = true;
       return false;
     }
     op_start_time = millis();
@@ -122,6 +133,7 @@ static bool socket_send(const void* aBuf, __uint16 aSize) {
     data += len;
     txInd += len;
   }
+  script_lock = true;
   return true;
 }
 
