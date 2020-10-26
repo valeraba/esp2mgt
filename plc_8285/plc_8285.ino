@@ -432,7 +432,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.6 19/X/2020";
+  const char* ver = "PLC 8285 v0.62 19/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -493,7 +493,7 @@ void loop() {
         blink_mode = 0B11111111;
       else {
         blink_mode = 0B00000101;
-        WiFi_begin();
+        //WiFi_begin();
       }
     }
   }
@@ -585,18 +585,24 @@ void loop() {
 
     if (disconnectTime) {
       if ((t - disconnectTime) >= 120000) { // две минуты
-        disconnectTime = 0;
-        if (strlen(EC_config.net.host2)) {
-          if (toggleServer) {
-            toggleServer = false;
-            mgt_start(&client, EC_config.net.host1);
-            debugLog(F("start %s\n"), EC_config.net.host1);
+        if (isWiFiConnected()) {       
+          disconnectTime = 0;
+          if (strlen(EC_config.net.host2)) {
+            if (toggleServer) {
+              toggleServer = false;
+              mgt_start(&client, EC_config.net.host1);
+              debugLog(F("start %s\n"), EC_config.net.host1);
+            }
+            else {
+              toggleServer = true;
+              mgt_start(&client, EC_config.net.host2);
+              debugLog(F("start %s\n"), EC_config.net.host2);
+            }
           }
-          else {
-            toggleServer = true;
-            mgt_start(&client, EC_config.net.host2);
-            debugLog(F("start %s\n"), EC_config.net.host2);
-          }
+        }
+        else {
+          WiFi_begin();
+          return;
         }
       }
       else
