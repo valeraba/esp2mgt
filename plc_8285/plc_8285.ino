@@ -41,6 +41,7 @@ const char* WIFI_PASSWORD = EC_config.net.pass;
 extern struct PortableSocket mySocket;
 
 Ticker ticker;
+static bool script_lock = false;
 
 
 uint8_t blink_mode = 0B00000101;
@@ -308,6 +309,12 @@ void tick() {
   uint32_t t = millis();
   but_run(&but, t);
 
+
+  if ((!script_lock) && EC_config.app.scriptMode && (!bk_debug)) { // если работа по сценариию и нет отладки
+    if (!bk_run_interrupt(t))
+      EC_config.app.scriptMode = false;
+  }
+
 }
 
 __uint16 getRegMode(__uint8 aNum) {
@@ -432,7 +439,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.62 19/X/2020";
+  const char* ver = "PLC 8285 v0.7 26/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -470,6 +477,8 @@ static bool synchronization = false;
 static TimeStamp disconnectTime = 0; // время последней попытки подключения
 
 void loop() {
+  script_lock = true;
+  
   static uint32_t ms2 = 0;
 
   uint32_t ms = millis();
@@ -584,7 +593,8 @@ void loop() {
 
 
     if (disconnectTime) {
-      if ((t - disconnectTime) >= 120000) { // две минуты
+//      if ((t - disconnectTime) >= 120000) { // две минуты
+      if ((t - disconnectTime) >= 2000) { // две секунды
         if (isWiFiConnected()) {       
           disconnectTime = 0;
           if (strlen(EC_config.net.host2)) {
@@ -602,11 +612,14 @@ void loop() {
         }
         else {
           WiFi_begin();
+          script_lock = false;
           return;
         }
       }
-      else
+      else {
+        script_lock = false;
         return;
+      }
     }
     
       
@@ -681,6 +694,7 @@ void loop() {
     }
 
   }
+  script_lock = false;
 }
 
 __int32 getBias() {

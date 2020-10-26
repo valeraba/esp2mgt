@@ -573,6 +573,42 @@ bool bk_run() {
 }
 
 
+
+bool bk_run_interrupt(__uint32 aTime) {
+    if (done) {
+        IP = 0;
+        SP = MAX_STACK;
+        SP_Base = SP;
+        loopEnter = false;
+        done = false;
+        pause = 0;
+        error = false;
+    }
+    else {
+        if ((__uint32)(aTime - startTime) < pause)
+            return true;
+        pause = 0;
+    }
+
+
+    __uint8 cmd = code[IP++];
+    if (cmd == 0)
+        done = true;
+    else if (cmd > 38)
+        error = true;
+    else
+        cmdTable[cmd]();
+
+
+    if (error) {
+        done = true;
+        return false;
+    }
+
+    return true;
+}
+
+
 void bk_break(__uint16 aPoint) {
   breakpoint = aPoint;
   isBreak = false;
