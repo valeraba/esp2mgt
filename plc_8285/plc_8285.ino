@@ -439,7 +439,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.73 26/X/2020";
+  const char* ver = "PLC 8285 v0.74 26/X/2020";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -546,9 +546,11 @@ void loop() {
     if (synchronization)
       sch_run(t);
 
-    int analog = analogRead(PIN_A0);
+    //int analog = analogRead(PIN_A0); // TODO временно
     sleepms(2);
-    if ((abs(sA0->m_value.u.m_float - analog) >= 10) || (periodEvent(&_1_sec, t))) {
+//    if ((abs(sA0->m_value.u.m_float - analog) >= 10) || (periodEvent(&_1_sec, t))) {
+    if (periodEvent(&_1_sec, t)) {
+      int analog = analogRead(PIN_A0);
       signal_updateDouble(sA0, analog, t);
       A0Dirty = true;
     }
