@@ -20,6 +20,7 @@
 #include <OneWire.h>
 #include <Ticker.h>
 #include "DallasTemperature.h"
+#include "solarTime.h"
 
 #define BASIC_R1
 //#define BASIC_R2
@@ -193,8 +194,8 @@ static void write_scheduleData(int aNumber, __uint8* aValue) {
     EC_config.app.schedulePtr[i] += shift / 9;
   }
 
-  __int16 temp = (aValue[3] << 8) | aValue[2];
-  EC_config.app.bias = (__int32)temp * 60;
+//  __int16 temp = (aValue[3] << 8) | aValue[2];
+//  EC_config.app.bias = (__int32)temp * 60;
 
   memmove(EC_config.app.scheduleData + startMove + shift, EC_config.app.scheduleData + startMove, sizeMove);
   memcpy(EC_config.app.scheduleData + start, aValue + 4, length - 2);
@@ -361,6 +362,9 @@ void setup() {
   EC_begin();
   EC_read();
 
+  solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
+
+
   // Подключаемся к WiFi
   WiFi_begin();
   if (WiFi.status() == WL_CONNECTED) blink_mode = 0B11111111;
@@ -438,11 +442,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.72 22/VI/2020";
+  const char* ver = "PLC Sonoff Basic R1 v1.81 22/XI/2020";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.72 22/VI/2020";
+  const char* ver = "PLC Sonoff Basic R2 v1.81 22/XI/2020";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.72 22/VI/2020";
+  const char* ver = "PLC Sonoff Basic R3 v1.81 22/XI/2020";
 #endif
 
 
@@ -880,6 +884,12 @@ float bk_getTime(__uint8 aOp) {
     case 9:
       f = m_clock->Year + 1970;
       break;
+    case 10: // sunrise
+      f = solarCompute(m_clock->Day, m_clock->Month, true);
+      break;
+    case 11: // sunset
+      f = solarCompute(m_clock->Day, m_clock->Month, false);
+      break;    
     default:
       f = NAN;
       break;
