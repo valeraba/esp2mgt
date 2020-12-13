@@ -37,11 +37,15 @@ struct AppConfig {
 
   byte romArr[4][8];
 
-  int32_t bias;
+//  int32_t bias;
   uint8_t scheduleData[100 * 9]; // расписание
   uint8_t schedulePtr[4];
 
   uint8_t script[2000]; // скрипт
+
+  int32_t bias; // сдвиг в секундах относительно GMT
+  double latitude; // широта
+  double longitude; // долгота
 };
 
 struct ECConfig {

@@ -52,7 +52,7 @@ static void net_default(void) {
 static void app_default(void) {
   EC_config.app.scriptMode = 0; // ручной режим
 
-  EC_config.app.bias = 0;
+  //EC_config.app.bias = 0;
 
   for (int i = 0; i < 4; i++) {
     EC_config.app.reverse[i] = false;
@@ -63,6 +63,11 @@ static void app_default(void) {
 
   for (int i = 0; i < 8; i++)
     EC_config.app.stored[i] = 0;
+
+  EC_config.app.bias = 0;
+  EC_config.app.latitude = 0;
+  EC_config.app.longitude = 0; 
+
 }
 
 static uint32_t net_crc(void){
@@ -121,7 +126,7 @@ void EC_read(void){
 void deleteSensor() {
   for (int i = 0; i < 4; i++) {
     EC_config.app.romArr[i][0] = 0;
-    EC_config.app.script[i] = 0; // важно обнулить только первые три байта
+    //EC_config.app.script[i] = 0; // важно обнулить только первые три байта
   }
   EC_save();
 }
