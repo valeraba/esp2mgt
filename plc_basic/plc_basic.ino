@@ -442,11 +442,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.81 22/XI/2020";
+  const char* ver = "PLC Sonoff Basic R1 v1.82 29/XII/2020";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.81 22/XI/2020";
+  const char* ver = "PLC Sonoff Basic R2 v1.82 29/XII/2020";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.81 22/XI/2020";
+  const char* ver = "PLC Sonoff Basic R3 v1.82 29/XII/2020";
 #endif
 
 
@@ -550,23 +550,23 @@ void loop() {
   }
 
   if ((__uint32)(millis() - convertTime) >= 800) {
-    bool errorRead = false;
+    //bool errorRead = false;
     if (convertDone) {
-      convertDone = false;
+      //convertDone = false;
       for (int i = 0; i < 4; i++) {
         temperatureDirty[i] = sensors[i].read();
         if (temperatureDirty[i]) {
           signal_updateDouble(sSensor + i, sensors[i].value, t);
-          errorRead = true;
+          //errorRead = true;
         }
       }
     }
-    if (!errorRead) {
+    //if (!errorRead) {
       if (DallasTemperature::convertAll(&oneWire))
         convertDone = true;
       else
         convertDone = false;
-    }
+    //}
     convertTime = millis();
   }
 
