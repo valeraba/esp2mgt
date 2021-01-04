@@ -442,11 +442,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.82 29/XII/2020";
+  const char* ver = "PLC Sonoff Basic R1 v1.83 4/I/2021";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.82 29/XII/2020";
+  const char* ver = "PLC Sonoff Basic R2 v1.83 4/I/2021";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.82 29/XII/2020";
+  const char* ver = "PLC Sonoff Basic R3 v1.83 4/I/2021";
 #endif
 
 
@@ -530,6 +530,8 @@ void loop() {
 
   static __uint32 convertTime = 0;
   static bool convertDone = false;
+  static __uint8 stateOneWire = 0; // датчики не вычитывались
+  
 
   bool flagEvent = periodEvent(&_1_min, t);
 
@@ -550,23 +552,33 @@ void loop() {
   }
 
   if ((__uint32)(millis() - convertTime) >= 800) {
-    //bool errorRead = false;
     if (convertDone) {
-      //convertDone = false;
+      if (stateOneWire == 1)
+        stateOneWire = 2;    
       for (int i = 0; i < 4; i++) {
         temperatureDirty[i] = sensors[i].read();
         if (temperatureDirty[i]) {
           signal_updateDouble(sSensor + i, sensors[i].value, t);
-          //errorRead = true;
+          stateOneWire = 1;
         }
-      }
+      }        
     }
-    //if (!errorRead) {
-      if (DallasTemperature::convertAll(&oneWire))
-        convertDone = true;
-      else
-        convertDone = false;
-    //}
+    if (stateOneWire == 2) { // если пропали датчики 
+      stateOneWire = 0;
+      digitalWrite(PIN_ONEWIRE, LOW); // лечим шину (один раз)
+      pinMode(PIN_ONEWIRE, OUTPUT);
+      delay(10);
+      pinMode(PIN_ONEWIRE, INPUT);
+      delay(1);
+    } 
+
+    if (DallasTemperature::convertAll(&oneWire))
+      convertDone = true;
+    else {
+      convertDone = false;
+      if (stateOneWire == 1)
+        stateOneWire = 2; // пропали датчики  
+    }      
     convertTime = millis();
   }
 
