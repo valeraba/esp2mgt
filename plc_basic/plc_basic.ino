@@ -442,11 +442,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.83 4/I/2021";
+  const char* ver = "PLC Sonoff Basic R1 v1.84 5/I/2021";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.83 4/I/2021";
+  const char* ver = "PLC Sonoff Basic R2 v1.84 5/I/2021";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.83 4/I/2021";
+  const char* ver = "PLC Sonoff Basic R3 v1.84 5/I/2021";
 #endif
 
 
@@ -541,16 +541,6 @@ void loop() {
     DIDirty = true;
   }
 
-  for (int i = 0; i < 2; i++) { // TODO перенести вниз, после сценария
-    float v = sVariable[i].m_value.u.m_float;
-    if ((v == v) || (variables[i] == variables[i])) {
-      if (flagEvent || (v != variables[i])) {
-        signal_updateDouble(sVariable + i, variables[i], t);
-        variableDirty[i] = true;
-      }
-    }
-  }
-
   if ((__uint32)(millis() - convertTime) >= 800) {
     if (convertDone) {
       if (stateOneWire == 1)
@@ -564,12 +554,13 @@ void loop() {
       }        
     }
     if (stateOneWire == 2) { // если пропали датчики 
-      stateOneWire = 0;
-      digitalWrite(PIN_ONEWIRE, LOW); // лечим шину (один раз)
+      stateOneWire = 0; // лечим шину (один раз)
+      digitalWrite(PIN_ONEWIRE, LOW); 
       pinMode(PIN_ONEWIRE, OUTPUT);
+      delay(20);
+      digitalWrite(PIN_ONEWIRE, HIGH); 
       delay(10);
       pinMode(PIN_ONEWIRE, INPUT);
-      delay(1);
     } 
 
     if (DallasTemperature::convertAll(&oneWire))
@@ -599,6 +590,16 @@ void loop() {
   if (EC_config.app.scriptMode || bk_debug) { // если работа по сценариию или отладка
     if (!bk_run())
       EC_config.app.scriptMode = false;
+  }
+
+  for (int i = 0; i < 2; i++) {
+    float v = sVariable[i].m_value.u.m_float;
+    if ((v == v) || (variables[i] == variables[i])) {
+      if (flagEvent || (v != variables[i])) {
+        signal_updateDouble(sVariable + i, variables[i], t);
+        variableDirty[i] = true;
+      }
+    }
   }
 
   bool relay = getRelay();
