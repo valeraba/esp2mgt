@@ -5,6 +5,7 @@ Contacts: <bvagile@gmail.com>
 
 #include "http.h"
 #include "config.h"
+#include "solarTime.h"
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 char localIp[16] = {0};
@@ -147,6 +148,7 @@ bool HTTP_isAuth() {
 char tempBuf[10];
 #define EC_STR(str) ;out+=(str);out+=
 #define EC_BYTE(b) ;sprintf(tempBuf,"%u",(b));out+=tempBuf;out+=
+#define EC_DOUBLE(d) ;sprintf(tempBuf,"%g",(d));out+=tempBuf;out+=
 #define EC_CHECK(b) ;if(b)out+="checked";out+=
 #define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%u",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
 #define EC_APPCONFIG ;for(int i=0;i<17;i++){uint32_t value=EC_config.app.regMode[i];if(i<9)value+=EC_config.app.DIOMode[i]<<16;out+=value;if(i<16)out+=", ";}out+=
@@ -217,29 +219,11 @@ void mainHandler(void) {
     return;
   }
 
-  /*/ Сохранение контроллера
-  if (server.hasArg("relay")) {
-    bool val = digitalRead(PIN_RELAY);
-    digitalWrite(PIN_RELAY, !val);
-    //server.sendContent("HTTP/1.1 301 OK\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n");
-    server.sendContent("HTTP/1.1 303 See Other\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n");
-    return;
-  }*/
-
   const char* mode = "";
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
-/*  const char* relayState;
-  const char* relayCmd;
-  if (digitalRead(PIN_RELAY)) {
-    relayState = "включено";
-    relayCmd = "Выключить";
-  }
-  else {
-    relayState = "выключено";
-    relayCmd = "Включить";
-  }*/
+  float timeZone = -((float)EC_config.app.bias / 3600);  
 
   String out =
     F("<html>" "\r\n"
@@ -256,6 +240,18 @@ void mainHandler(void) {
       "\t\t" "<li><a href='/reboot'>Перезагрузка</a></li>" "\r\n"
       "</ul>" "\r\n"
       "<h3>") EC_STR(mode) F("</h3>" "\r\n"
+
+      "\t" "<h3>Часовой пояс</h3>" "\r\n"
+      "\t" "<table>" "\r\n"
+      "\t\t" "<tr><td>GMT:</td><td><input id='zone' type='number' min='-12' max='12' value='") EC_DOUBLE(timeZone) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t" "</table>" "\r\n"
+      "\t" "<h3>Географические координаты</h3>" "\r\n"
+      "\t" "<table>" "\r\n"
+      "\t\t" "<tr><td>Широта:</td><td><input id='lat' type='number' min='-90' max='90' value='") EC_DOUBLE(EC_config.app.latitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "<tr><td>Долгота:</td><td><input id='lon' type='number' min='-180' max='180' value='") EC_DOUBLE(EC_config.app.longitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t" "</table>" "\r\n"
+      "\t" "<br>" "\r\n"
+      "\t" "<br>" "\r\n"     
 
       "<div id='setDiv'></div>" "\r\n"
       "<p><button onclick='appConfig()'>Сохранить настройки</button></p>" "\r\n"
@@ -401,7 +397,10 @@ void mainHandler(void) {
       "\t" "}" "\r\n"
 
       "\t" "function appConfig() {" "\r\n"
-      "\t\t" "var str = '';" "\r\n"
+      "\t\t" "var str = 'zone=' + document.getElementById('zone').value + '&';" "\r\n"
+      "\t\t" "str += 'lat=' + document.getElementById('lat').value + '&';" "\r\n"
+      "\t\t" "str += 'lon=' + document.getElementById('lon').value + '&';" "\r\n"
+      
       "\t\t" "for (var i = 0; i < 17; i++) {" "\r\n"
       "\t\t\t" "var value = parseInt(regInputArr[i].value, 10) + (parseInt(regUnitArr[i].value, 10) << 10) + (parseInt(regModeArr[i].value, 10) << 13);" "\r\n"
       "\t\t\t" "if (i < 9)" "\r\n"
@@ -433,6 +432,32 @@ void mainHandler(void) {
   server.send ( 200, "text/html", out );
 }
 
+// Настройки GPIO и регистрации
+static void appConfigHandler() {
+  // Проверка прав администратора
+  if (!HTTP_isAuth())
+    return;
+  
+  String name;
+  for (int i = 0; i < 17; i++) {
+    name = "p";
+    name += i;
+    uint32_t value = atoi(server.arg(name).c_str());
+    EC_config.app.regMode[i] = value & 0xffff;
+    if (i < 9)
+      EC_config.app.DIOMode[i] = (value >> 16) & 0xff;
+  }
+
+  if (server.hasArg("zone")) EC_config.app.bias = -(atof(server.arg("zone").c_str()) * 3600);
+  if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());
+  if (server.hasArg("lon")) EC_config.app.longitude = atof(server.arg("lon").c_str());
+  
+  EC_save();
+
+  solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
+
+  server.send(200, "text/html", "");
+}
 
 //-------------------------------------------------
 void setConfig() {
@@ -525,21 +550,6 @@ void getConfig() {
   server.send(200, "text/html", out);
 }
 
-// Настройки GPIO и регистрации
-static void appConfigHandler() {
-  String name;
-  for (int i = 0; i < 17; i++) {
-    name = "p";
-    name += i;
-    uint32_t value = atoi(server.arg(name).c_str());
-    EC_config.app.regMode[i] = value & 0xffff;
-    if (i < 9)
-      EC_config.app.DIOMode[i] = (value >> 16) & 0xff;
-  }
-
-  EC_save();
-  server.send(200, "text/html", "");
-}
 
 // Удалить все привязки к датчикам
 static void unbindHandler() {
