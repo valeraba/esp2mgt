@@ -457,7 +457,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC Sonoff 4CH v2.7 13/XII/2020";
+  const char* ver = "PLC Sonoff 4CH v2.82 24/I/2021";
   signal_updatePtr(sVersion, ver, 0);
 
   signal_updatePtr(sScript, EC_config.app.script, 0);

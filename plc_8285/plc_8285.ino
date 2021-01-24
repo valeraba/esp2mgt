@@ -442,7 +442,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.81 22/I/2021";
+  const char* ver = "PLC 8285 v0.84 24/I/2021";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);

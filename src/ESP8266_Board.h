@@ -27,6 +27,7 @@ bool isConnected = false;
 
 static __uint32 op_start_time = 0; // начало отправки
 static __uint32 m_timeLastActivity = 0; // время последней активности на сокете
+static __uint32 m_timeErrConnect = 0; // время ошибки открытия сокета
 
 TimeStamp getUTCTime() {
   static TimeStamp delta = 0;
@@ -51,9 +52,23 @@ static bool socket_open(const char* aHost, __uint16 aPort) {
   //script_lock = false;
   if (!socket.connect(aHost, aPort)) {
     //script_lock = true;
+
+    __uint32 t = millis();    
+    if (m_timeErrConnect) { 
+      if ((__uint32)(t - m_timeErrConnect) > 120000) { // 120 секунд
+        m_timeErrConnect = 0;
+        WiFi.disconnect(true); // обрываем WIFI соединения
+        debugLog(F("WiFi.disconnect(true)\n"));
+      }
+    }
+    else
+      m_timeErrConnect = t;
+      
     debugLog(F("socket connection failed\n"));
     return false;
   }
+  m_timeErrConnect = 0;
+  
   //script_lock = true;
   
   txInd = 0;

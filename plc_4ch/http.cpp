@@ -29,7 +29,17 @@ static bool ConnectWiFi(void) {
     return false;
   }
 
-  WiFi.mode(WIFI_STA);
+    // Удаляем предыдущие конфигурации WIFI сети
+  if (WiFi.getPersistent() == true)
+    WiFi.persistent(false);   //disable saving wifi config into SDK flash area
+  WiFi.disconnect(true); // обрываем WIFI соединения
+  WiFi.softAPdisconnect(true); // отключаем отчку доступа(если она была
+  WiFi.mode(WIFI_OFF); // отключаем WIFI
+  //WiFi.persistent(true);   //enable saving wifi config into SDK flash area
+  delay(1); 
+
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  //WiFi.mode(WIFI_STA);
 
   // Пытаемся соединиться с точкой доступа
   //debugLog(F("\nConnecting to: %s/%s\n"), EC_config.ssid, EC_config.pass);

@@ -22,9 +22,9 @@
 #include "DallasTemperature.h"
 #include "solarTime.h"
 
-#define BASIC_R1
+//#define BASIC_R1
 //#define BASIC_R2
-//#define BASIC_R3
+#define BASIC_R3
 
 #if defined(BASIC_R1)
 #define PIN_ONEWIRE   14
@@ -442,11 +442,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.84 5/I/2021";
+  const char* ver = "PLC Sonoff Basic R1 v1.86 24/I/2021";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.84 5/I/2021";
+  const char* ver = "PLC Sonoff Basic R2 v1.86 24/I/2021";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.84 5/I/2021";
+  const char* ver = "PLC Sonoff Basic R3 v1.86 24/I/2021";
 #endif
 
 
