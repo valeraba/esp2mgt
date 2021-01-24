@@ -343,7 +343,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.42 12/VIII/2020";
+  const char* ver = "Telegram Bot v0.43 24/I/2021";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
