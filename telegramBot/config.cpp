@@ -72,35 +72,23 @@ bool writeScript(__uint8* aData, __uint16 aSize) {
   
   // Инициализация файловой системы
   FSInfo fs_info;
-  debugLog(F("tuta-1\n"));
   SPIFFS.begin();
-  debugLog(F("tuta-2\n"));
   if (!SPIFFS.info(fs_info)) {
-  debugLog(F("tuta-3\n"));
     if (!SPIFFS.format()) {
-      debugLog(F("tuta-4\n"));
       SPIFFS.end();
       return false;
     }
   }
-  debugLog(F("tuta-5\n"));
 
   memcpy(script, &aSize, 2);
   memcpy(script + 2, aData, aSize);
   __uint32 crc = crc32(script + 2, aSize, 0x03022020);
   memcpy(script + 2 + aSize, &crc, 4);
-  debugLog(F("tuta-6\n"));
-
 
   File f = SPIFFS.open("/f.bin", "w+");
-  debugLog(F("tuta-7\n"));
-
-
   size_t result = f.write(script + 2, aSize + 4);
-  debugLog(F("tuta-8\n"));
 
   SPIFFS.end();
-  debugLog(F("tuta-9\n"));
 
   if (result != (aSize + 6))
     return false;
