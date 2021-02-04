@@ -6,11 +6,6 @@ Contacts: <bvagile@gmail.com>
 #ifndef _config_H_
 #define _config_H_
 #include <ESP8266WiFi.h>
-#include "Types.h"
-
-extern unsigned char script[4006];
-void loadScript();
-bool writeScript(__uint8* aData, __uint16 aSize);
 
 extern struct ECConfig EC_config;
 
@@ -43,7 +38,7 @@ struct AppConfig {
   byte romArr[4][8];
 
   bool scriptMode; // режим работы: 0 - ручной, 1 - работа по сценарию
-//  uint8_t script[3000]; // скрипт
+  uint8_t script[3000]; // скрипт
 
   int32_t bias; // сдвиг в секундах относительно GMT
   double latitude; // широта

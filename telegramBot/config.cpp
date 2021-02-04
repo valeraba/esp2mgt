@@ -3,98 +3,12 @@
   Contacts: <bvagile@gmail.com>
 */
 
-//#include "Types.h"
+#include "Types.h"
 #include "config.h"
 #include <EEPROM.h>
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 __uint32 crc32(__uint8* aBuf, __uint32 aLen, __uint32 aCrc);
-
-
-unsigned char script[4006];
-
-void loadScript() {
-  script[0] = 0;
-  script[1] = 0;
-  script[2] = 0;
-
-  // Инициализация файловой системы
-  FSInfo fs_info;
-  SPIFFS.begin();
-  if (!SPIFFS.info(fs_info)) {
-    if (!SPIFFS.format()) {
-      SPIFFS.end();
-      return;
-    }
-  }
-  File f = SPIFFS.open("/f.bin", "r");
-
-  if (!f) {
-    SPIFFS.end();
-    return;
-  }
-
-  int size = f.size();
-  if ((size > (sizeof(script) - 4)) || (size < 5)) {
-    SPIFFS.end();
-    return;
-  }
- 
-  int result = f.read(script + 2, size);
-  SPIFFS.end();
-
-  if (result != size) {
-      script[0] = 0;
-      script[1] = 0;
-      script[2] = 0;
-      return;
-  }
-
-  __uint32 crc = 0;
-  memcpy(&crc, script + 2 + size - 4, 4);
-
-
-  if (crc32(script + 2, size - 4, 0x03022020) == crc) {
-    size -= 4;
-    memcpy(script, &size, 2);
-  }
-  else {
-    script[0] = 0;
-    script[1] = 0;
-    script[2] = 0;
-  }
-  
-}
-
-bool writeScript(__uint8* aData, __uint16 aSize) {
-  if (aSize > (sizeof(script) - 6))
-    return false;
-  
-  // Инициализация файловой системы
-  FSInfo fs_info;
-  SPIFFS.begin();
-  if (!SPIFFS.info(fs_info)) {
-    if (!SPIFFS.format()) {
-      SPIFFS.end();
-      return false;
-    }
-  }
-
-  memcpy(script, &aSize, 2);
-  memcpy(script + 2, aData, aSize);
-  __uint32 crc = crc32(script + 2, aSize, 0x03022020);
-  memcpy(script + 2 + aSize, &crc, 4);
-
-  File f = SPIFFS.open("/f.bin", "w+");
-  size_t result = f.write(script + 2, aSize + 4);
-
-  SPIFFS.end();
-
-  if (result != (aSize + 6))
-    return false;
-}
-
-
 
 struct ECConfig EC_config;
 
@@ -142,7 +56,7 @@ static void app_default(void) {
   EC_config.app.scriptMode = 0; // ручной режим
 
   for (int i = 0; i < 4; i++) {
-//    EC_config.app.script[i] = 0; // важно обнулить только первые три байта
+    EC_config.app.script[i] = 0; // важно обнулить только первые три байта
     EC_config.app.romArr[i][0] = 0;
   }
 
@@ -151,7 +65,7 @@ static void app_default(void) {
 
   EC_config.app.bias = 0;
   EC_config.app.latitude = 0;
-  EC_config.app.longitude = 0;
+  EC_config.app.longitude = 0;  
 }
 
 static uint32_t net_crc(void) {

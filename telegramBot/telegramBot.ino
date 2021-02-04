@@ -96,6 +96,7 @@ TelegramBot tlgBot(EC_config.app.token, updateChartId, "t.gate.mgt24.ru", 8080);
 
 char msg[256];
 
+
 // write with confirmation for "token"
 static void write_token(char* aValue) {
   strncpy(EC_config.app.token, aValue, sizeof(EC_config.app.token));
@@ -145,10 +146,9 @@ static void write_scriptMode(bool aValue) {
 static void write_script(__uint8* aValue) {
   __uint16 length = (aValue[1] << 8) | aValue[0];
 
-  //if (length <= (sizeof(EC_config.app.script) - 2)) {
-  if (writeScript(aValue + 2, length)) {
-    //memcpy(EC_config.app.script, aValue, length + 2);
-    //EC_save();
+  if (length <= (sizeof(EC_config.app.script) - 2)) {
+    memcpy(EC_config.app.script, aValue, length + 2);
+    EC_save();
     signal_updateTime(sScript, getUTCTime());
     mgt_writeAns(&client, sScript, erOk); // confirmation
 
@@ -160,13 +160,10 @@ static void write_script(__uint8* aValue) {
     }
     mgt_detachAll(&client);
 
-    //bk_init(EC_config.app.script + 2);
-    bk_init(script + 2);
+    bk_init(EC_config.app.script + 2);
   }
-  else {
-    loadScript();
+  else
     mgt_writeAns(&client, sScript, erWriteFailed);
-  }
 }
 
 static __uint8 debugArr[10] = { 1, 0, 0 };
@@ -259,9 +256,6 @@ void setup() {
   Serial.begin(115200);
   debugLog(F("\n\nFree memory %d\n"), ESP.getFreeHeap());
 
-  // загрузить сценарий
-  loadScript();
-
   // Инициализация EEPROM
   EC_begin();
   EC_read();
@@ -345,16 +339,14 @@ void setup() {
   signal_updateDouble(sChatId, EC_config.app.chatId, 0);
 
   signal_updateInt(sScriptMode, EC_config.app.scriptMode, 0);
-  //signal_updatePtr(sScript, EC_config.app.script, 0);
-  signal_updatePtr(sScript, script, 0);
+  signal_updatePtr(sScript, EC_config.app.script, 0);
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.47 28/I/2021";
+  const char* ver = "Telegram Bot v0.43 24/I/2021";
   signal_updatePtr(sVersion, ver, 0);
 
-  //bk_init(EC_config.app.script + 2);
-  bk_init(script + 2);
+  bk_init(EC_config.app.script + 2);
   mgt_start(&client, EC_config.net.host1);
 
   ticker.attach_ms(25, tick);
