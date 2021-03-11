@@ -31,7 +31,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
-static TimeStamp deviceTimeArray[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[20];
 static int lenMapSignalName = 0;
 
 
@@ -353,7 +353,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.43 24/I/2021";
+  const char* ver = "Telegram Bot v0.44 11/III/2021";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
@@ -546,7 +546,7 @@ void loop() {
     }
     else if (mgtState == stDisconnect) {
       struct Signal* s = sUpdate + 1;
-      for (int i = 0; i < lenMapSignalName; i++)
+      for (int i = 0; i < 20; i++)
         s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
 
       if (strlen(EC_config.net.host2)) {
@@ -634,13 +634,12 @@ static struct Signal* findSignal(char* aName) {
 
   s = mgt_attachSignal(&client, aName);
   if (s) {
-    // добавим в кэш
-    deviceTimeArray[lenMapSignalName] = -1; // сбросим время отрыва устройства
-    
+    // добавим в кэш   
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
-    s->m_value.m_reg = 0; 
+    s->m_value.m_reg = 0;
+    deviceTimeArray[s - sUpdate - 1] = -1; // сбросим время отрыва устройства
   }
 
   return s;

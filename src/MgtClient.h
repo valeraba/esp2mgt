@@ -1,5 +1,5 @@
 /*
-Copyright Â© 2015, BVAgile. All rights reserved.
+Copyright © 2015, BVAgile. All rights reserved.
 Contacts: <bvagile@gmail.com>
 */
 
@@ -133,7 +133,8 @@ enum OpCode {
 	opWrite = 1, // the write request
 	opWriteAsync = 2, // asynchronous writes without confirmation
 	opRecv = 3,
-	opAttach = 4
+	opAttach = 4,
+	opDetach = 5
 };
 
 struct StoreSetting {
