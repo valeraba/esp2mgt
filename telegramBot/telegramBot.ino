@@ -31,6 +31,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[COUNT_SIGNALS];
 static int lenMapSignalName = 0;
 
 
@@ -224,7 +225,16 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
     case opRecv:
       aSignal->m_value.m_time = getUTCTime();
       aSignal->m_value.u = aWriteValue->u;
+      aSignal->m_value.m_reg = 1; // устройство на связи
       break;
+    case opDetach:
+      if (aSignal > sUpdate) {
+        if (aSignal->m_value.m_reg == 1) { // если устройство было на связи
+          aSignal->m_value.m_reg = 0; // пометим, что устройство в отрыве
+          deviceTimeArray[aSignal - sUpdate - 1] = getUTCTime(); // отметим время отрыва устройства
+        }
+      }
+      break;    
   }
 }
 
@@ -535,6 +545,10 @@ void loop() {
       mgt_send(&client, sScriptMode); // scriptMode
     }
     else if (mgtState == stDisconnect) {
+      struct Signal* s = sUpdate + 1;
+      for (int i = 0; i < lenMapSignalName; i++)
+        s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
+
       if (strlen(EC_config.net.host2)) {
         mgt_stop(&client, 0);
         if (toggleServer) {
@@ -621,16 +635,19 @@ static struct Signal* findSignal(char* aName) {
   s = mgt_attachSignal(&client, aName);
   if (s) {
     // добавим в кэш
+    deviceTimeArray[lenMapSignalName] = -1; // сбросим время отрыва устройства
+    
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
+    s->m_value.m_reg = 0; 
   }
 
   return s;
 }
 
 
-float bk_getSignal(char* aName, __uint16 aLifetime) {
+float bk_getSignal(char* aName, __int16 aLifetime) {
   struct Signal* s = findSignal(aName);
   if (!s)
     return NAN;
@@ -641,11 +658,20 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
   if ((s >= sVariable) && (s < sScriptMode))
     return variables[s - sVariable];
 
-  if (aLifetime) {
-    if ((s > sUpdate) || ((s >= sSensor) && (s < sDI))) {
-      TimeStamp t = getUTCTime();
-      if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
-        return NAN;
+  if (aLifetime != 0) {
+    if (aLifetime > 0) {
+      if ((s > sUpdate) || ((s >= sSensor) && (s < sDI))) {
+        TimeStamp t = getUTCTime();
+        if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
+          return NAN;
+      }
+    }
+    else {
+      if (s > sUpdate) {
+        TimeStamp t = getUTCTime();
+        if ((s->m_value.m_reg == 0) && (deviceTimeArray[s - sUpdate - 1] - ((int)aLifetime * 1000) < t))
+          return NAN;
+      }
     }
   }
 

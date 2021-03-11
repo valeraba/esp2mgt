@@ -398,7 +398,7 @@ static void S_get() {
 
   __uint16 adr = getUint16(code + IP);
   char* name = (char*)code + adr;
-  __uint16 lifetime = getUint16(code + IP + 2);
+  __int16 lifetime = (__int16)getUint16(code + IP + 2);
 
   IP += 4;
 

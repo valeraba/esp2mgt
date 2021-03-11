@@ -6,7 +6,7 @@
 void bk_init(__uint8* aCode);
 bool bk_run();
 bool bk_run_interrupt(__uint32 aTime);
-float bk_getSignal(char* aName, __uint16 aLifetime);
+float bk_getSignal(char* aName, __int16 aLifetime);
 void bk_setSignal(char* aName, float aValue);
 void bk_setSignal(char* aName, const char* aStr);
 void bk_print(float aValue);
