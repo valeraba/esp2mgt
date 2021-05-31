@@ -33,6 +33,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[20];
 static int lenMapSignalName = 0;
 
 
@@ -258,12 +259,9 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
       }
       break;
     case opAttach:
-/*      if ((aSignal >= sScheduleData) && (aSignal < sIPAddress))
-        readScheduleData(aSignal - sScheduleData, aOpCode);
-      else
-        mgt_send(&client, aSignal);*/
+      if ((aSignal >= sDIO) && (aSignal < sScript))
+        mgt_send(&client, aSignal);
       break;
-
     case opWrite:
       if ((aSignal >= sDIO) && (aSignal < (sDIO + 9)))
         write_DIO(aSignal - sDIO, aWriteValue->u.m_bool);
@@ -287,7 +285,16 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
     case opRecv:
       aSignal->m_value.m_time = getUTCTime();
       aSignal->m_value.u = aWriteValue->u;
+      aSignal->m_value.m_reg = 1; // устройство на связи
       break;
+    case opDetach:
+      if (aSignal > sUpdate) {
+        if (aSignal->m_value.m_reg == 1) { // если устройство было на связи
+          aSignal->m_value.m_reg = 0; // пометим, что устройство в отрыве
+          deviceTimeArray[aSignal - sUpdate - 1] = getUTCTime(); // отметим время отрыва устройства
+        }
+      }
+      break; 
   }
 }
 
@@ -442,7 +449,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC 8285 v0.84 24/I/2021";
+  const char* ver = "PLC 8285 v0.9 31/V/2021";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -678,6 +685,10 @@ void loop() {
       mgt_send(&client, sScriptMode); // scriptMode
     }
     else if (mgtState == stDisconnect) {
+      struct Signal* s = sUpdate + 1;
+      for (int i = 0; i < 20; i++)
+        s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
+      
       disconnectTime = t;
       if (strlen(EC_config.net.host2))
         mgt_stop(&client, 0);
@@ -787,13 +798,14 @@ static struct Signal* findSignal(char* aName) {
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
+    s->m_value.m_reg = 0;
+    deviceTimeArray[s - sUpdate - 1] = -1; // сбросим время отрыва устройства
   }
 
   return s;
 }
 
-
-float bk_getSignal(char* aName, __uint16 aLifetime) {
+float bk_getSignal(char* aName, __int16 aLifetime) {
   struct Signal* s = findSignal(aName);
   if (!s)
     return NAN;
@@ -816,11 +828,28 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
   if (s->m_value.m_time == -1)
       return NAN;
 
-  if (aLifetime) {
+/*  if (aLifetime) {
     if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
       TimeStamp t = getUTCTime();
       if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
         return NAN;
+    }
+  }*/
+
+  if (aLifetime != 0) {
+    if (aLifetime > 0) {
+      if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
+        TimeStamp t = getUTCTime();
+        if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
+          return NAN;
+      }
+    }
+    else {
+      if (s > sUpdate) {
+        TimeStamp t = getUTCTime();
+        if ((s->m_value.m_reg == 0) && (deviceTimeArray[s - sUpdate - 1] - ((int)aLifetime * 1000) < t))
+          return NAN;
+      }
     }
   }
 
