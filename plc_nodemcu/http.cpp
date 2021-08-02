@@ -5,6 +5,7 @@ Contacts: <bvagile@gmail.com>
 
 #include "http.h"
 #include "config.h"
+#include "solarTime.h"
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 char localIp[16] = {0};
@@ -114,6 +115,7 @@ bool HTTP_isAuth() {
 char tempBuf[10];
 #define EC_STR(str) ;out+=(str);out+=
 #define EC_BYTE(b) ;sprintf(tempBuf,"%u",(b));out+=tempBuf;out+=
+#define EC_DOUBLE(d) ;sprintf(tempBuf,"%g",(d));out+=tempBuf;out+=
 #define EC_CHECK(b) ;if(b)out+="checked";out+=
 #define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%u",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
 #define EC_HISTORY(b) ;if(EC_config.app.history&(1<<b))out+=" checked";out+=
@@ -195,16 +197,7 @@ void mainHandler(void) {
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
-/*  const char* relayState;
-  const char* relayCmd;
-  if (digitalRead(PIN_RELAY)) {
-    relayState = "включено";
-    relayCmd = "Выключить";
-  }
-  else {
-    relayState = "выключено";
-    relayCmd = "Включить";
-  }*/
+  float timeZone = -((float)EC_config.app.bias / 3600);  
 
   String out =
     F("<html>" "\r\n"
@@ -218,13 +211,22 @@ void mainHandler(void) {
       "<ul>" "\r\n"
       "\t" "<li><a href='/config'>Настройка параметров сети</a></li>" "\r\n"
       "\t" "<li><a href='/login'>Выход</a></li>" "\r\n"
+      "\t" "<li><a href='/reboot'>Перезагрузка</a></li>" "\r\n"
       "</ul>" "\r\n"
       "<h3>") EC_STR(mode) F("</h3>" "\r\n"
-/*      "<h3>Реле ") EC_STR(relayState) F("</h3>" "\r\n"
-      "<form action='/' method='POST'>" "\r\n"
-      "\t" "<input type='submit' name='relay' value='") EC_STR(relayCmd) F(" реле'>" "\r\n"
-      "</form>" "\r\n"*/
-      "<button onclick='unbind()'>Отвязать датчики</button>" "\r\n"
+      
+      "\t" "<h3>Часовой пояс</h3>" "\r\n"
+      "\t" "<table>" "\r\n"
+      "\t\t" "<tr><td>GMT:</td><td><input id='zone' type='number' min='-12' max='12' value='") EC_DOUBLE(timeZone) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t" "</table>" "\r\n"
+      "\t" "<h3>Географические координаты</h3>" "\r\n"
+      "\t" "<table>" "\r\n"
+      "\t\t" "<tr><td>Широта:</td><td><input id='lat' type='number' min='-90' max='90' value='") EC_DOUBLE(EC_config.app.latitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "<tr><td>Долгота:</td><td><input id='lon' type='number' min='-180' max='180' value='") EC_DOUBLE(EC_config.app.longitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t" "</table>" "\r\n"
+      "\t" "<br>" "\r\n"
+      "\t" "<br>" "\r\n"   
+     
 
       "<p><b>Список исторических данных</b></p>" "\r\n"
       "<input type='checkbox' id='p0'") EC_HISTORY(0) F(">D1<br>" "\r\n"
@@ -240,7 +242,10 @@ void mainHandler(void) {
       "<input type='checkbox' id='p10'") EC_HISTORY(10) F(">variable_6<br>" "\r\n"
       "<input type='checkbox' id='p11'") EC_HISTORY(11) F(">variable_7<br>" "\r\n"
       "<input type='checkbox' id='p12'") EC_HISTORY(12) F(">variable_8<br>" "\r\n"
-      "<p><button onclick = 'history()'>Сохранить список</button></p>" "\r\n"
+
+      "<p><button onclick = 'appConfig()'>Сохранить настройки</button></p>" "\r\n"
+      "<button onclick='unbind()'>Отвязать датчики</button>" "\r\n"
+
 
       "<script>" "\r\n"
       "\t" "function unbind() {" "\r\n"
@@ -251,14 +256,20 @@ void mainHandler(void) {
       "\t\t" "xhr.send();" "\r\n"
       "\t" "}" "\r\n"
 
-      "\t" "function history() {" "\r\n"
+      "\t" "function appConfig() {" "\r\n"
+      "\t\t" "var str = 'zone=' + document.getElementById('zone').value + '&';" "\r\n"
+      "\t\t" "str += 'lat=' + document.getElementById('lat').value + '&';" "\r\n"
+      "\t\t" "str += 'lon=' + document.getElementById('lon').value + '&';" "\r\n"
+
       "\t\t" "var value = 0;" "\r\n"
       "\t\t" "for (var i = 0; i < 13; i++) {" "\r\n"
       "\t\t\t" "if (document.getElementById('p' + i).checked)" "\r\n"
       "\t\t\t\t" "value |= (1 << i); " "\r\n"
       "\t\t" "}" "\r\n"
       "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
-      "\t\t" "xhr.open('GET', '/history?val=' + value);" "\r\n"
+      //"\t\t" "xhr.open('GET', '/history?val=' + value);" "\r\n"
+      "\t\t" "xhr.open('GET', '/appConfig?' + str + 'history=' + value);" "\r\n"
+  
       "\t\t" "xhr.onload = function() { alert('OK') };" "\r\n"
       "\t\t" "xhr.onerror = function() { alert('ERROR') };" "\r\n"
       "\t\t" "xhr.send();" "\r\n"
@@ -370,13 +381,23 @@ static void unbindHandler() {
     server.send(200, "text/html", "");
 }
 
-// Исторические данные
-static void historyHandler() {
-    if (server.hasArg("val")) {
-        EC_config.app.history = atoi(server.arg("val").c_str());
-        EC_save();
-    }
-    server.send(200, "text/html", "");
+// Настройки приложения 
+static void appConfigHandler() {
+  // Проверка прав администратора
+  if (!HTTP_isAuth())
+    return;
+    
+  if (server.hasArg("val")) EC_config.app.history = atoi(server.arg("val").c_str());
+  
+  if (server.hasArg("zone")) EC_config.app.bias = -(atof(server.arg("zone").c_str()) * 3600);
+  if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());
+  if (server.hasArg("lon")) EC_config.app.longitude = atof(server.arg("lon").c_str());
+  
+  EC_save();
+
+  solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
+ 
+  server.send(200, "text/html", "");
 }
 
 // Перезагрузка
@@ -406,7 +427,7 @@ void HTTP_begin(void) {
   server.on("/config", HTTP_POST, setConfig);
   server.on("/login", loginHandler);
   server.on("/unbind", unbindHandler);
-  server.on("/history", historyHandler);
+  server.on("/appConfig", appConfigHandler);
   server.on("/reboot", rebootHandler);
   //server.onNotFound(notFoundHandler);
   //here the list of headers to be recorded

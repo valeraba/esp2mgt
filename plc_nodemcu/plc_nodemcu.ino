@@ -20,6 +20,8 @@ Contacts: <bvagile@gmail.com>
 #include <OneWire.h>
 #include <Ticker.h>
 #include "DallasTemperature.h"
+#include "solarTime.h"
+
 
 #define PIN_BUTTON      0
 #define PIN_LED_MODE    2
@@ -32,6 +34,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[20];
 static int lenMapSignalName = 0;
 
 
@@ -273,6 +276,8 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
         readScheduleData(aSignal - sScheduleData, aOpCode);
       else
         mgt_send(&client, aSignal);*/
+     if ((aSignal >= sDIO) && (aSignal < sScript))
+        mgt_send(&client, aSignal);
       break;
 
     case opWrite:
@@ -300,7 +305,16 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
     case opRecv:
       aSignal->m_value.m_time = getUTCTime();
       aSignal->m_value.u = aWriteValue->u;
+      aSignal->m_value.m_reg = 1; // устройство на связи
       break;
+    case opDetach:
+      if (aSignal > sUpdate) {
+        if (aSignal->m_value.m_reg == 1) { // если устройство было на связи
+          aSignal->m_value.m_reg = 0; // пометим, что устройство в отрыве
+          deviceTimeArray[aSignal - sUpdate - 1] = getUTCTime(); // отметим время отрыва устройства
+        }
+      }
+      break; 
   }
 }
 
@@ -339,6 +353,8 @@ void setup() {
   // Инициализация EEPROM
   EC_begin();
   EC_read();
+
+  solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
 
   // Подключаемся к WiFi
   WiFi_begin();
@@ -445,7 +461,7 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 
-  const char* ver = "PLC NodeMCU v0.9 25/V/2020";
+  const char* ver = "PLC NodeMCU v1.0 02/XIII/2021";
   signal_updatePtr(sVersion, ver, t);
 
   signal_updatePtr(sScript, EC_config.app.script, t);
@@ -478,10 +494,11 @@ static bool periodEvent(struct Period* aPeriod, TimeStamp aTime) {
 struct Period _1_min = { 1L * 60 * 1000, 0 };
 struct Period _1_sec = { 1L * 1000, 0 };
 
+static bool synchronization = false;
+
 void loop() {
   static uint32_t ms2 = 0;
 
-  static bool synchronization = false;
 
   uint32_t ms = millis();
   switch (but_get(&but)) {
@@ -641,6 +658,10 @@ void loop() {
       mgt_send(&client, sScriptMode); // scriptMode
     }
     else if (mgtState == stDisconnect) {
+      struct Signal* s = sUpdate + 1;
+      for (int i = 0; i < 20; i++)
+        s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
+
       if (strlen(EC_config.net.host2)) {
         mgt_stop(&client, 0);
         if (toggleServer) {
@@ -744,13 +765,15 @@ static struct Signal* findSignal(char* aName) {
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
+    s->m_value.m_reg = 0;
+    deviceTimeArray[s - sUpdate - 1] = -1; // сбросим время отрыва устройства
   }
 
   return s;
 }
 
 
-float bk_getSignal(char* aName, __uint16 aLifetime) {
+float bk_getSignal(char* aName, __int16 aLifetime) {
   struct Signal* s = findSignal(aName);
   if (!s)
     return NAN;
@@ -777,11 +800,20 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
   if (s->m_value.m_time == -1)
       return NAN;
       
-  if (aLifetime) {
-    if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
-      TimeStamp t = getUTCTime();
-      if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
-        return NAN;
+  if (aLifetime != 0) {
+    if (aLifetime > 0) {
+      if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
+        TimeStamp t = getUTCTime();
+        if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
+          return NAN;
+      }
+    }
+    else {
+       if (s > sUpdate) {
+        TimeStamp t = getUTCTime();
+        if ((s->m_value.m_reg == 0) && (deviceTimeArray[s - sUpdate - 1] - ((int)aLifetime * 1000) < t))
+          return NAN;
+      }     
     }
   }
 
@@ -799,6 +831,9 @@ void bk_setSignal(char* aName, float aValue) {
   else if ((s >= sVariable) && (s < sDIOMode)) {
     variables[s - sVariable] = aValue;
   }
+}
+
+void bk_setSignal(char* aName, const char* aStr) {
 }
 
 void bk_print(float aValue) {
@@ -838,6 +873,57 @@ void bk_prints(const char* aStr) {
     }
     sleepms(100);
   }
+}
+
+Time* m_clock = sch_getTime();
+
+float bk_getTime(__uint8 aOp) {
+  if (!synchronization)
+    return NAN;
+  float f;
+  switch (aOp) {
+    case 1:
+      f = m_clock->Hour * 3600 + m_clock->Minute * 60 + m_clock->Second;
+      break;
+    case 2:
+      f = m_clock->total_sec / 86400;
+      break;
+    case 3:
+      f = m_clock->Second;
+      break;
+    case 4:
+      f = m_clock->Minute;
+      break;
+    case 5:
+      f = m_clock->Hour;
+      break;
+    case 6: {
+        __uint8 wday = m_clock->Wday + 1;
+        if (wday == 7)
+          wday = 0;
+        f = wday;
+        break;
+      }
+    case 7:
+      f = m_clock->Day;
+      break;
+    case 8:
+      f = m_clock->Month;
+      break;
+    case 9:
+      f = m_clock->Year + 1970;
+      break;
+    case 10: // sunrise
+      f = solarCompute(m_clock->Day, m_clock->Month, true);
+      break;
+    case 11: // sunset
+      f = solarCompute(m_clock->Day, m_clock->Month, false);
+      break;    
+    default:
+      f = NAN;
+      break;
+  }
+  return f;
 }
 
 void bk_onBreak(__uint16 aPoint) {
