@@ -387,7 +387,7 @@ static void appConfigHandler() {
   if (!HTTP_isAuth())
     return;
     
-  if (server.hasArg("val")) EC_config.app.history = atoi(server.arg("val").c_str());
+  if (server.hasArg("history")) EC_config.app.history = atoi(server.arg("history").c_str());
   
   if (server.hasArg("zone")) EC_config.app.bias = -(atof(server.arg("zone").c_str()) * 3600);
   if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());

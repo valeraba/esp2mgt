@@ -52,7 +52,7 @@ static void net_default(void) {
 static void app_default(void) {
   EC_config.app.scriptMode = 0; // ручной режим
 
-  //EC_config.app.bias = 0;
+  EC_config.app.history = 0;
 
   for (int i = 0; i < 4; i++) {
     EC_config.app.DIOMode[i] = 0;

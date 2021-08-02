@@ -174,8 +174,8 @@ static void write_scheduleData(int aNumber, __uint8* aValue) {
     EC_config.app.schedulePtr[i] += shift / 9;
   }
 
-  __int16 temp = (aValue[3] << 8) | aValue[2];
-  EC_config.app.bias = (__int32)temp * 60;
+  //__int16 temp = (aValue[3] << 8) | aValue[2];
+  //EC_config.app.bias = (__int32)temp * 60;
 
   memmove(EC_config.app.scheduleData + startMove + shift, EC_config.app.scheduleData + startMove, sizeMove);
   memcpy(EC_config.app.scheduleData + start, aValue + 4, length - 2);
