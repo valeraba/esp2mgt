@@ -36,6 +36,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[20];
 static int lenMapSignalName = 0;
 
 
@@ -63,7 +64,8 @@ static struct Signal* sDown; // down
 static struct Signal* sSetup; // setup
 static struct Signal* sState; // state
 static struct Signal* sPosition; // position
-static struct Signal* sHalfCycle; // halfCycle
+static struct Signal* sUpCycle; // upCycle
+static struct Signal* sDownCycle; // downCycle
 static struct Signal* sSchedule; // schedule
 static struct Signal* sScheduleData; // scheduleData
 static struct Signal* sAutoMode; // autoMode
@@ -89,8 +91,9 @@ enum RollState {
 
 RollState rollState = roll_CLOSE;
 
-volatile __int32 rollPosition = 0;
-__int32 rollPositionSetup = 0;
+volatile float rollPosition = 0;
+float rollPositionSetup = 0;
+float rollDownCoef;
 
 
 static bool directFlag = false; // false: DOWN, true: UP
@@ -153,7 +156,7 @@ bool rollClose(__uint32 aTime) {
 }
 
 void presetPosition(__int8 aPercent) { 
-  float f = EC_config.app.rollHalfCycle;
+  float f = EC_config.app.rollUpCycle;
   f /= 100;
   f *= aPercent;
   rollPosition = f;
@@ -163,7 +166,7 @@ void presetPosition(__int8 aPercent) {
 static __int8 autoPosition; // позиция автоматических режимов
 
 bool setPosition(__int8 aPercent) { 
-  float f = EC_config.app.rollHalfCycle;
+  float f = EC_config.app.rollUpCycle;
   f /= 100;
   f *= aPercent;
   rollPositionSetup = f;
@@ -184,7 +187,7 @@ bool setPosition(__int8 aPercent) {
 
 __int8 getPosition() {
   float f = 100;
-  f /= EC_config.app.rollHalfCycle;
+  f /= EC_config.app.rollUpCycle;
   f *= rollPosition;
 
   return roundf(f);
@@ -264,22 +267,36 @@ static void writeAsync_sSetup(__int8 aValue) {
   mgt_send(&client, sSetup);
 }
 
-// write with confirmation for "halfCycle"
-static void write_halfCycle(float aValue) {
+// write with confirmation for "upCycle"
+static void write_upCycle(float aValue) {
   if ((aValue >= 1) && (aValue <= 60)) {
-    EC_config.app.rollHalfCycle = (__uint16)(aValue * 1000);
-    if (rollPosition > EC_config.app.rollHalfCycle)
-      rollPosition = EC_config.app.rollHalfCycle;
-    if (rollPositionSetup > EC_config.app.rollHalfCycle)
-      rollPositionSetup = EC_config.app.rollHalfCycle;
-    
+    EC_config.app.rollUpCycle = (__uint16)(aValue * 1000);
+    if (rollPosition > EC_config.app.rollUpCycle)
+      rollPosition = EC_config.app.rollUpCycle;
+    if (rollPositionSetup > EC_config.app.rollUpCycle)
+      rollPositionSetup = EC_config.app.rollUpCycle;
+
+    rollDownCoef = (float)EC_config.app.rollUpCycle / EC_config.app.rollDownCycle;
     EC_save();
-    signal_updateDouble(sHalfCycle, aValue, getUTCTime());
-    mgt_writeAns(&client, sHalfCycle, erOk);
+    signal_updateDouble(sUpCycle, aValue, getUTCTime());
+    mgt_writeAns(&client, sUpCycle, erOk);
   }
   else
-    mgt_writeAns(&client, sHalfCycle, erWriteFailed);
+    mgt_writeAns(&client, sUpCycle, erWriteFailed);
+}
 
+// write with confirmation for "downCycle"
+static void write_downCycle(float aValue) {
+  if ((aValue >= 1) && (aValue <= 60)) {
+    EC_config.app.rollDownCycle = (__uint16)(aValue * 1000);
+
+    rollDownCoef = (float)EC_config.app.rollUpCycle / EC_config.app.rollDownCycle;
+    EC_save();
+    signal_updateDouble(sDownCycle, aValue, getUTCTime());
+    mgt_writeAns(&client, sDownCycle, erOk);
+  }
+  else
+    mgt_writeAns(&client, sDownCycle, erWriteFailed);
 }
 
 // write with confirmation for "scheduleData"
@@ -455,14 +472,18 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
     }
     break;
   case opAttach:
+   if ((aSignal >= sDI) && (aSignal != sScheduleData) && (aSignal != sScript) && (aSignal != sDebug) && (aSignal < sUpdate))
+     mgt_send(&client, aSignal);
     break;
   case opWrite:
     if (aSignal == sUp)
       write_up(aWriteValue->u.m_bool);
     else if (aSignal == sDown)
       write_down(aWriteValue->u.m_bool);
-    else if (aSignal == sHalfCycle)
-      write_halfCycle(aWriteValue->u.m_float);
+    else if (aSignal == sUpCycle)
+      write_upCycle(aWriteValue->u.m_float);
+    else if (aSignal == sDownCycle)
+      write_downCycle(aWriteValue->u.m_float);
     else if (aSignal == sScheduleData)
       write_scheduleData(0, aWriteValue->u.m_blob);
     else if (aSignal == sAutoMode)
@@ -485,7 +506,16 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
   case opRecv:
     aSignal->m_value.m_time = getUTCTime();
     aSignal->m_value.u = aWriteValue->u;
+    aSignal->m_value.m_reg = 1; // устройство на связи
     break;
+  case opDetach:
+    if (aSignal > sUpdate) {
+      if (aSignal->m_value.m_reg == 1) { // если устройство было на связи
+        aSignal->m_value.m_reg = 0; // пометим, что устройство в отрыве
+        deviceTimeArray[aSignal - sUpdate - 1] = getUTCTime(); // отметим время отрыва устройства
+      }
+    }
+    break; 
   }
 }
 
@@ -520,8 +550,8 @@ void tick() {
       rollPosition += dif;
       if (rollPosition >= rollPositionSetup) {
         setMove(false);
-        if (rollPosition >= EC_config.app.rollHalfCycle) {
-          rollPosition = EC_config.app.rollHalfCycle;
+        if (rollPosition >= EC_config.app.rollUpCycle) {
+          rollPosition = EC_config.app.rollUpCycle;
           rollState = roll_OPEN;
         }
         else
@@ -529,7 +559,7 @@ void tick() {
       }
     }
     else {
-      rollPosition -= dif;
+      rollPosition -= rollDownCoef * dif;
       if (rollPosition <= rollPositionSetup) {
         setMove(false);
         if (rollPosition <= 0) {
@@ -555,7 +585,7 @@ void tick() {
       return;
     
     if (info_up == BUT_LONG_DOWN) { // движение
-      rollPositionSetup = EC_config.app.rollHalfCycle;
+      rollPositionSetup = EC_config.app.rollUpCycle;
       rollOpen(t);
     }
     else if (info_down == BUT_LONG_DOWN) {
@@ -613,7 +643,8 @@ void setup() {
   sSetup = mgt_createSignal(&client, "setup", tpInt8, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_ASYNC_WRITE, STORE_MODE_OFF, 0);
   sState = mgt_createSignal(&client, "state", tpUInt8, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sPosition = mgt_createSignal(&client, "position", tpInt8, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
-  sHalfCycle = mgt_createSignal(&client, "halfCycle", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  sUpCycle = mgt_createSignal(&client, "upCycle", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
+  sDownCycle = mgt_createSignal(&client, "downCycle", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sSchedule = mgt_createSignal(&client, "schedule", tpFloat, SEC_LEV_READ | SIG_ACCESS_READ, STORE_MODE_OFF, 0);
   sScheduleData = mgt_createSignal(&client, "scheduleData", tpBlob, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
   sAutoMode = mgt_createSignal(&client, "autoMode", tpBool, SEC_LEV_READ | SIG_ACCESS_READ | SIG_ACCESS_WRITE, STORE_MODE_OFF, 0);
@@ -634,7 +665,10 @@ void setup() {
   but_init(&but_up, PIN_BUTTON_UP, 1200, false);
   but_init(&but_down, PIN_BUTTON_DOWN, 1200, false);
 
-  signal_updateDouble(sHalfCycle, (float)EC_config.app.rollHalfCycle/1000, 0);
+  rollDownCoef = (float)EC_config.app.rollUpCycle / EC_config.app.rollDownCycle;
+  
+  signal_updateDouble(sUpCycle, (float)EC_config.app.rollUpCycle/1000, 0);
+  signal_updateDouble(sDownCycle, (float)EC_config.app.rollDownCycle/1000, 0);
   signal_updateInt(sAutoMode, (EC_config.app.mode == 1), 0);
   signal_updateInt(sScriptMode, (EC_config.app.mode == 2), 0);
   signal_updateInt(sLed, EC_config.app.led, 0);
@@ -651,7 +685,7 @@ void setup() {
   
   signal_updatePtr(sIPAddress, localIp, 0);
   
-  const char* ver = "Rolling Sonoff v1.9 29/VI/2020";
+  const char* ver = "Rolling Sonoff v2.0 26/IX/2021";
   signal_updatePtr(sVersion, ver, 0);
 
   signal_updatePtr(sScript, EC_config.app.script, 0);
@@ -844,6 +878,10 @@ void loop() {
       mgt_send(&client, sSchedule);
   }
   else if (mgtState == stDisconnect) {
+    struct Signal* s = sUpdate + 1;
+    for (int i = 0; i < 20; i++)
+      s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
+
     if (strlen(EC_config.net.host2)) { 
       mgt_stop(&client, 0);
       if (toggleServer) {
@@ -955,13 +993,15 @@ static struct Signal* findSignal(char* aName) {
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
+    s->m_value.m_reg = 0;
+    deviceTimeArray[s - sUpdate - 1] = -1; // сбросим время отрыва устройства
   }
 
   return s;
 }
 
 
-float bk_getSignal(char* aName, __uint16 aLifetime) {
+float bk_getSignal(char* aName, __int16 aLifetime) {
   struct Signal* s = findSignal(aName);
   if (!s) {
     mgt_attachSignal(&client, aName);
@@ -975,10 +1015,17 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
       return NAN;
 
   if (aLifetime) {
-    if (s > sUpdate) {
-      TimeStamp t = getUTCTime();
-      if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
-        return NAN;
+    if (aLifetime > 0) {
+      if (s > sUpdate) {
+        TimeStamp t = getUTCTime();
+        if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
+          return NAN;
+      }
+    }
+    else {
+        TimeStamp t = getUTCTime();
+        if ((s->m_value.m_reg == 0) && (deviceTimeArray[s - sUpdate - 1] - ((int)aLifetime * 1000) < t))
+          return NAN;
     }
   }
 

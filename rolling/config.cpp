@@ -56,7 +56,8 @@ static void net_default(void) {
 
 // Устанавливаем настройки приложения по умолчанию
 static void app_default(void) {
-  EC_config.app.rollHalfCycle = 11500; // 11.5 сек
+  EC_config.app.rollUpCycle = 11500; // 11.5 сек
+  EC_config.app.rollDownCycle = 11500; // 11.5 сек
   EC_config.app.mode = 0; // ручной режим
 
   EC_config.app.bias = 0;
