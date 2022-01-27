@@ -56,8 +56,6 @@ static void app_default(void) {
   EC_config.app.scriptMode = 0; // ручной режим
   EC_config.app.led = true;
 
-  EC_config.app.bias = 0;
-
   EC_config.app.schedulePtr[0] = 0;
   EC_config.app.schedulePtr[1] = 0;
 
@@ -68,6 +66,10 @@ static void app_default(void) {
 
   for (int i = 0; i < 8; i++)
     EC_config.app.stored[i] = 0;
+
+  EC_config.app.bias = 0;
+  EC_config.app.latitude = 0;
+  EC_config.app.longitude = 0;   
 }
 
 

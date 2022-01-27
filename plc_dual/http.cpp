@@ -5,6 +5,7 @@ Contacts: <bvagile@gmail.com>
 
 #include "http.h"
 #include "config.h"
+#include "solarTime.h"
 
 void debugLog(const __FlashStringHelper* aFormat, ...);
 char localIp[16] = {0};
@@ -27,10 +28,20 @@ static bool ConnectWiFi(void) {
     return false;
   }
 
-  WiFi.mode(WIFI_STA);
+    // Удаляем предыдущие конфигурации WIFI сети
+  if (WiFi.getPersistent() == true)
+    WiFi.persistent(false);   //disable saving wifi config into SDK flash area
+  WiFi.disconnect(true); // обрываем WIFI соединения
+  WiFi.softAPdisconnect(true); // отключаем отчку доступа(если она была
+  WiFi.mode(WIFI_OFF); // отключаем WIFI
+  //WiFi.persistent(true);   //enable saving wifi config into SDK flash area
+  delay(1); 
+
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  //WiFi.mode(WIFI_STA);
 
   // Пытаемся соединиться с точкой доступа
-  //debugLog(F("\nConnecting to: %s/%s\n"), EC_Config.ssid, EC_Config.pass);
+  //debugLog(F("\nConnecting to: %s/%s\n"), EC_config.ssid, EC_config.pass);
   debugLog(F("\nConnecting to: %s\n"), EC_config.net.ssid);
   WiFi.begin(EC_config.net.ssid, EC_config.net.pass);
   delay(1000);
@@ -114,6 +125,7 @@ bool HTTP_isAuth() {
 char tempBuf[10];
 #define EC_STR(str) ;out+=(str);out+=
 #define EC_BYTE(b) ;sprintf(tempBuf,"%u",(b));out+=tempBuf;out+=
+#define EC_DOUBLE(d) ;sprintf(tempBuf,"%g",(d));out+=tempBuf;out+=
 #define EC_CHECK(b) ;if(b)out+="checked";out+=
 #define EC_DEVICE_ID ;if(EC_config.net.deviceId <= 0x7fffffff)sprintf(tempBuf,"%u",EC_config.net.deviceId);else tempBuf[0]=0;out+=tempBuf;out+=
 
@@ -145,7 +157,7 @@ void loginHandler() {
     F("<html>" "\r\n"
       "<head>" "\r\n"
       "\t" "<meta charset='utf-8'/>" "\r\n"
-      "\t" "<title>Sonoff TH10/TH16</title>" "\r\n"
+      "\t" "<title>") EC_STR(EC_config.net.name) F("</title>" "\r\n"
       "\t" "<style>body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; } input {width:250px; height:28px}</style>" "\r\n"
       "</head>" "\r\n"
       "<body>" "\r\n"
@@ -193,6 +205,8 @@ void mainHandler(void) {
   if (isAP)
     mode = "Устройство в режиме точки доступа";
 
+  float timeZone = -((float)EC_config.app.bias / 3600);  
+
   const char* relayState;
   const char* relayCmd;
   if (digitalRead(PIN_RELAY)) {
@@ -216,7 +230,24 @@ void mainHandler(void) {
       "<ul>" "\r\n"
       "\t" "<li><a href='/config'>Настройка параметров сети</a></li>" "\r\n"
       "\t" "<li><a href='/login'>Выход</a></li>" "\r\n"
+      "\t" "<li><a href='/reboot'>Перезагрузка</a></li>" "\r\n"
       "</ul>" "\r\n"
+
+      "\t" "<form name='config'>" "\r\n"
+      "\t\t" "<h3>Часовой пояс</h3>" "\r\n"
+      "\t\t" "<table>" "\r\n"
+      "\t\t\t" "<tr><td>GMT:</td><td><input name='zone' type='number' min='-12' max='12' value='") EC_DOUBLE(timeZone) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "</table>" "\r\n"
+      "\t\t" "<h3>Географические координаты</h3>" "\r\n"
+      "\t\t" "<table>" "\r\n"
+      "\t\t\t" "<tr><td>Широта:</td><td><input name='lat' type='number' min='-90' max='90' value='") EC_DOUBLE(EC_config.app.latitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t\t" "<tr><td>Долгота:</td><td><input name='lon' type='number' min='-180' max='180' value='") EC_DOUBLE(EC_config.app.longitude) F("' style='width: 100px'></td></tr>" "\r\n"
+      "\t\t" "</table>" "\r\n"
+      "\t" "</form>" "\r\n"
+      "\t" "<button onclick='setConfig()'>Сохранить</button>" "\r\n"
+      "\t" "<br>" "\r\n"
+      "\t" "<br>" "\r\n"
+      
       "<h3>") EC_STR(mode) F("</h3>" "\r\n"
       "<h3>Реле ") EC_STR(relayState) F("</h3>" "\r\n"
       "<form action='/' method='POST'>" "\r\n"
@@ -226,6 +257,16 @@ void mainHandler(void) {
 
 
       "<script>" "\r\n"
+
+      "\t" "function setConfig() {" "\r\n"
+      "\t\t" "var form = new FormData(document.forms.config);" "\r\n"
+      "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
+      "\t\t" "xhr.open('POST', '/appConfig');" "\r\n"
+      "\t\t" "xhr.onload = function() { alert('OK') };" "\r\n"
+      "\t\t" "xhr.onerror = function() { alert('ERROR') };" "\r\n"
+      "\t\t" "xhr.send(form);" "\r\n"
+      "\t" "}" "\r\n"
+      
       "\t" "function unbind() {" "\r\n"
       "\t\t" "var xhr = new XMLHttpRequest();" "\r\n"
       "\t\t" "xhr.open('POST', '/unbind');" "\r\n"
@@ -233,6 +274,7 @@ void mainHandler(void) {
       "\t\t" "xhr.onerror = function() { alert('ERROR') };" "\r\n"
       "\t\t" "xhr.send();" "\r\n"
       "\t" "}" "\r\n"
+      
       "</script>" "\r\n"
      
       "</body>" "\r\n"
@@ -241,6 +283,21 @@ void mainHandler(void) {
   server.send ( 200, "text/html", out );
 }
 
+//-------------------------------------------------
+void appConfigHandler() {
+    // Проверка прав администратора
+    if (!HTTP_isAuth())
+        return;
+
+    if (server.hasArg("zone")) EC_config.app.bias = -(atof(server.arg("zone").c_str()) * 3600);
+    if (server.hasArg("lat")) EC_config.app.latitude = atof(server.arg("lat").c_str());
+    if (server.hasArg("lon")) EC_config.app.longitude = atof(server.arg("lon").c_str());
+    EC_save();
+
+    solarInit(EC_config.app.latitude, EC_config.app.longitude, EC_config.app.bias);
+
+    server.send(200, "text/html", "");
+}
 
 //-------------------------------------------------
 void setConfig() {
@@ -365,6 +422,7 @@ void HTTP_begin(void) {
   server.on("/config", HTTP_GET, getConfig);
   server.on("/config", HTTP_POST, setConfig);
   server.on("/login", loginHandler);
+  server.on("/appConfig", appConfigHandler);
   server.on("/unbind", unbindHandler);
   server.on("/reboot", rebootHandler);
   //server.onNotFound(notFoundHandler);
