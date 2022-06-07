@@ -353,11 +353,11 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v0.44 11/III/2021";
+  const char* ver = "Telegram Bot v1.00 05/VI/2022";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
-  mgt_start(&client, EC_config.net.host1);
+  mgt_start(&client, EC_config.net.host1, wUserPriority);
 
   ticker.attach_ms(25, tick);
 }
@@ -553,12 +553,12 @@ void loop() {
         mgt_stop(&client, 0);
         if (toggleServer) {
           toggleServer = false;
-          mgt_start(&client, EC_config.net.host1);
+          mgt_start(&client, EC_config.net.host1, wUserPriority);
           debugLog(F("start %s\n"), EC_config.net.host1);
         }
         else {
           toggleServer = true;
-          mgt_start(&client, EC_config.net.host2);
+          mgt_start(&client, EC_config.net.host2, wCloudOnly);
           debugLog(F("start %s\n"), EC_config.net.host2);
         }
       }

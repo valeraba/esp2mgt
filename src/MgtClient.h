@@ -1,5 +1,5 @@
 /*
-Copyright © 2015, BVAgile. All rights reserved.
+Copyright ï¿½ 2015, BVAgile. All rights reserved.
 Contacts: <bvagile@gmail.com>
 */
 
@@ -10,6 +10,7 @@ Contacts: <bvagile@gmail.com>
 
 #define CRYPTO_ON
 #define ATTACHED_MODE
+#define WEBSOCKET
 
 #ifdef ESP8266
 #define RX_BUF_SIZE	4096
@@ -24,9 +25,9 @@ Contacts: <bvagile@gmail.com>
 
 
 #ifdef _WIN32 // Windows
-	#define MGT_CONSTANT 8608
+	#define MGT_CONSTANT 8616
 #elif ESP8266
-	#define MGT_CONSTANT 8608
+	#define MGT_CONSTANT 8616
 #elif __ICCAVR__ // IAR AVR
 	#define MGT_CONSTANT 628
 #elif ARDUINO
@@ -94,6 +95,13 @@ enum SignalType {
 	tpBlob = 10,
 	tpFile = 11,
 	tpEvent = 12
+};
+
+enum WayTransfer {
+	wUserOnly = 0,
+	wUserPriority = 1,
+	wAnyone = 2,
+	wCloudOnly = 3
 };
 
 struct ChunkedTransfer {
@@ -210,7 +218,7 @@ struct Signal* mgt_createSignal(struct MgtClient* aClient, const char* aName, en
 struct Signal* mgt_attachSignal(struct MgtClient* aClient, const char* aName);
 void mgt_detachAll(struct MgtClient* aClient);
 #endif
-void mgt_start(struct MgtClient* aClient, const char* aHostname); // aHostname: "mgt24.ru" or "127.0.0.1"
+void mgt_start(struct MgtClient* aClient, const char* aHostname, enum WayTransfer aWay); // aHostname: "mgt24.ru" or "127.0.0.1"
 void mgt_stop(struct MgtClient* aClient, __uint16 aInterval); // go to offline mode for a specified interval (in seconds)
 enum MgtState mgt_run(struct MgtClient* aClient); // function turns the client network stack, recommended frequency from 1 to 20 Hz
 enum MgtState mgt_getState(struct MgtClient* aClient); // get client state
