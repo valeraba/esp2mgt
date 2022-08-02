@@ -161,8 +161,12 @@ bool TelegramBot::sendMessage(const char* aMsg) {
   client.print("GET /bot");
   client.print(m_token);
   client.print("/sendMessage?chat_id=");
-  client.print(chatId, 0);
-  //  Serial.println(chatId, 0);
+  //client.print(chatId, 0);
+  char s[20];
+  sprintf(s, "%.0f", chatId);
+  client.print(s);
+  //Serial.println(s);
+    
   client.print("&text=");
   client.print(urlencode(aMsg));
   client.println(" HTTP/1.1");
