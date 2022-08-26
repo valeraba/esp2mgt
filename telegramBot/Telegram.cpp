@@ -31,6 +31,22 @@ double findChatId(const char* aStr) {
   return atof(p);
 }
 
+__int32 lastMessageId = LONG_MIN;
+
+__int32 findMessageId(const char* aStr) {
+  const char* p = 0;
+  while (aStr) {
+    aStr = strstr(aStr, "\"message_id\":");
+    if (aStr) {
+      aStr += 13;
+      p = aStr;
+    }
+  }
+  if (!p) {
+    return LONG_MIN;
+  }
+  return atol(p);
+}
 
 size_t TelegramBot::readPayload(char* aBuf, size_t aSize) {
   int len;
@@ -112,10 +128,24 @@ String urlencode(String str)
   char code0;
   char code1;
   //char code2;
-  for (int i = 0; i < str.length(); i++) {
+
+  int len = str.length();
+  
+  for (int i = 0; i < len; i++) {
     c = str.charAt(i);
     if (c == ' ') {
       encodedString += '+';
+    } else if (c == '\\') {
+      i++;
+      if (i < len) {
+        c = str.charAt(i);
+        if (c == 'n')
+          encodedString += "%0A";
+        else if (c == 't')
+          encodedString += "%09";
+        else if (c == '\\')
+          encodedString += "%5C";     
+      }     
     } else if (isalnum(c)) {
       encodedString += c;
     } else {
@@ -141,6 +171,12 @@ String urlencode(String str)
 
 
 bool TelegramBot::sendMessage(const char* aMsg) {
+  bool flagDelete = aMsg[0] == 0;
+  
+  if (flagDelete && (lastMessageId == LONG_MIN))
+    return false;
+  
+  
   if (!m_token[0])
     return false;
 
@@ -160,15 +196,25 @@ bool TelegramBot::sendMessage(const char* aMsg) {
 
   client.print("GET /bot");
   client.print(m_token);
-  client.print("/sendMessage?chat_id=");
+  if (flagDelete)
+    client.print("/deleteMessage?chat_id=");
+  else  
+    client.print("/sendMessage?chat_id=");
   //client.print(chatId, 0);
   char s[20];
   sprintf(s, "%.0f", chatId);
   client.print(s);
   //Serial.println(s);
-    
-  client.print("&text=");
-  client.print(urlencode(aMsg));
+
+  if (flagDelete) {
+    client.print("&message_id=");
+    sprintf(s, "%li", lastMessageId);
+    client.print(s);   
+  }
+  else {
+    client.print("&text=");
+    client.print(urlencode(aMsg));
+  }
   client.println(" HTTP/1.1");
   client.print("Host: ");
   if (m_port == 80)
@@ -185,8 +231,18 @@ bool TelegramBot::sendMessage(const char* aMsg) {
 
   client.stop();
 
-  if (len)
+  if (flagDelete) {
+    lastMessageId = LONG_MIN;
     return true;
-  else
+  }
+  
+  
+  if (len) {
+    lastMessageId = findMessageId(buf);
+    return true;
+  }
+  else {
+    lastMessageId = LONG_MIN;
     return false;
+  }
 }
