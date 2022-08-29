@@ -471,6 +471,108 @@ static void Time() {
     copy32(stack + SP, &f);
 }
 
+static void Fmod() {
+  float v = getFloat32(stack + SP + 4);
+  float v2 = getFloat32(stack + SP);
+  v = fmod(v, v2);
+  copy32(stack + SP + 4, &v);
+  SP += 4;
+}
+
+static void Neg() {
+  float v = getFloat32(stack + SP);
+  v = -v;
+  copy32(stack + SP, &v);
+}
+
+static void Abs() {
+  float v = getFloat32(stack + SP);
+  if (v < 0) {
+    v = -v;
+    copy32(stack + SP, &v);
+  }
+}
+
+static void Round() {
+  float v = getFloat32(stack + SP);
+  v = round(v);
+  copy32(stack + SP, &v);
+}
+
+static void Ceil() {
+  float v = getFloat32(stack + SP);
+  v = ceil(v);
+  copy32(stack + SP, &v);
+}
+
+static void Floor() {
+  float v = getFloat32(stack + SP);
+  v = floor(v);
+  copy32(stack + SP, &v);
+}
+
+static void Sqrt() {
+  float v = getFloat32(stack + SP);
+  v = sqrt(v);
+  copy32(stack + SP, &v);
+}
+
+static void Log() {
+  float v = getFloat32(stack + SP);
+  v = log(v);
+  copy32(stack + SP, &v);
+}
+
+static void Log10() {
+  float v = getFloat32(stack + SP);
+  v = log10(v);
+  copy32(stack + SP, &v);
+}
+
+static void Exp() {
+  float v = getFloat32(stack + SP);
+  v = exp(v);
+  copy32(stack + SP, &v);
+}
+
+static const float DEG = PI / 180;
+static const float ADEG = 180 / PI;
+
+static void Sin() {
+  float v = getFloat32(stack + SP);
+  v = sin(v * DEG);
+  copy32(stack + SP, &v);
+}
+
+static void Cos() {
+  float v = getFloat32(stack + SP);
+  v = cos(v * DEG);
+  copy32(stack + SP, &v);
+}
+
+static void Tan() {
+  float v = getFloat32(stack + SP);
+  v = tan(v * DEG);
+  copy32(stack + SP, &v);
+}
+
+static void Asin() {
+  float v = getFloat32(stack + SP);
+  v = asin(v) * ADEG;
+  copy32(stack + SP, &v);
+}
+
+static void Acos() {
+  float v = getFloat32(stack + SP);
+  v = acos(v) * ADEG;
+  copy32(stack + SP, &v);
+}
+
+static void Atan() {
+  float v = getFloat32(stack + SP);
+  v = atan(v) * ADEG;
+  copy32(stack + SP, &v);
+}
 
 typedef void(*FuncCmd)();
 static FuncCmd cmdTable[] = { 0, Shift, // выход и сдвиг SP
@@ -481,7 +583,9 @@ Eq, Neq, Lt, Lte, Gt, Gte, // сравнение
 Je, Jne, Jmp, Call, Ret, // переходы и функции
 Loop, Repeat, For, For_arg, Continue, Break, // циклы
 Print, S_get, S_set, // дополнительные
-Delay, Pause, Time // время
+Delay, Pause, Time, // время
+Fmod, Neg, Abs, Round, Ceil, Floor, Sqrt, Log, Log10, Exp, // математика
+Sin, Cos, Tan, Asin, Acos, Atan // тригонометрия
 };
 
 void bk_init(__uint8* aCode) {
@@ -533,7 +637,7 @@ bool bk_run() {
       }
       break;
     }
-    if (cmd > 38) {
+    if (cmd > 54) {
       error = true;
       isBreak = true;
       bk_prints("Code error!");
