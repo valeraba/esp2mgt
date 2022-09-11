@@ -22,9 +22,9 @@
 #include "DallasTemperature.h"
 #include "solarTime.h"
 
-//#define BASIC_R1
+#define BASIC_R1
 //#define BASIC_R2
-#define BASIC_R3
+//#define BASIC_R3
 
 #if defined(BASIC_R1)
 #define PIN_ONEWIRE   14
@@ -45,6 +45,7 @@ struct MapNameItem {
   struct Signal* signal;
 };
 static struct MapNameItem mapSignalName[COUNT_SIGNALS];
+static TimeStamp deviceTimeArray[20];
 static int lenMapSignalName = 0;
 
 
@@ -320,7 +321,16 @@ static void handler(enum OpCode aOpCode, struct Signal* aSignal, struct SignalVa
     case opRecv:
       aSignal->m_value.m_time = getUTCTime();
       aSignal->m_value.u = aWriteValue->u;
+      aSignal->m_value.m_reg = 1; // устройство на связи
       break;
+    case opDetach:
+      if (aSignal > sUpdate) {
+        if (aSignal->m_value.m_reg == 1) { // если устройство было на связи
+          aSignal->m_value.m_reg = 0; // пометим, что устройство в отрыве
+          deviceTimeArray[aSignal - sUpdate - 1] = getUTCTime(); // отметим время отрыва устройства
+        }
+      }
+      break; 
   }
 }
 
@@ -442,11 +452,11 @@ void setup() {
     EC_save(); // сохраним новые привязки
 
 #if defined(BASIC_R1)
-  const char* ver = "PLC Sonoff Basic R1 v1.86 24/I/2021";
+  const char* ver = "PLC Sonoff Basic R1 v2.01 10/IX/2021";
 #elif defined(BASIC_R2)
-  const char* ver = "PLC Sonoff Basic R2 v1.86 24/I/2021";
+  const char* ver = "PLC Sonoff Basic R2 v2.01 10/IX/2021";
 #elif defined(BASIC_R3)
-  const char* ver = "PLC Sonoff Basic R3 v1.86 24/I/2021";
+  const char* ver = "PLC Sonoff Basic R3 v2.01 10/IX/2021";
 #endif
 
 
@@ -457,7 +467,7 @@ void setup() {
   signal_updatePtr(sIPAddress, localIp, 0);
 
   bk_init(EC_config.app.script + 2);
-  mgt_start(&client, EC_config.net.host1);
+  mgt_start(&client, EC_config.net.host1, wUserPriority);
 
   ticker.attach_ms(25, tick);
 }
@@ -665,16 +675,20 @@ void loop() {
       mgt_send(&client, sDI); // DI
     }
     else if (mgtState == stDisconnect) {
+      struct Signal* s = sUpdate + 1;
+      for (int i = 0; i < 20; i++)
+        s[i].m_value.m_reg = 0; // нет связи с удалённым устройством
+
       if (strlen(EC_config.net.host2)) {
         mgt_stop(&client, 0);
         if (toggleServer) {
           toggleServer = false;
-          mgt_start(&client, EC_config.net.host1);
+          mgt_start(&client, EC_config.net.host1, wUserPriority);
           debugLog(F("start %s\n"), EC_config.net.host1);
         }
         else {
           toggleServer = true;
-          mgt_start(&client, EC_config.net.host2);
+          mgt_start(&client, EC_config.net.host2, wCloudOnly);
           debugLog(F("start %s\n"), EC_config.net.host2);
         }
       }
@@ -768,13 +782,15 @@ static struct Signal* findSignal(char* aName) {
     mapSignalName[lenMapSignalName].name = aName;
     mapSignalName[lenMapSignalName++].signal = s;
     s->m_value.m_time = -1; // пометим, что параметр не действителен
+    s->m_value.m_reg = 0;
+    deviceTimeArray[s - sUpdate - 1] = -1; // сбросим время отрыва устройства
   }
 
   return s;
 }
 
 
-float bk_getSignal(char* aName, __uint16 aLifetime) {
+float bk_getSignal(char* aName, __int16 aLifetime) {
   struct Signal* s = findSignal(aName);
   if (!s)
     return NAN;
@@ -789,11 +805,20 @@ float bk_getSignal(char* aName, __uint16 aLifetime) {
   if (s->m_value.m_time == -1)
     return NAN;
 
-  if (aLifetime) {
-    if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
-      TimeStamp t = getUTCTime();
-      if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
-        return NAN;
+  if (aLifetime != 0) {
+    if (aLifetime > 0) {
+      if ((s > sUpdate) || ((s >= sSensor) && (s < sSchedule))) {
+        TimeStamp t = getUTCTime();
+        if (s->m_value.m_time + ((int)aLifetime * 1000) < t)
+          return NAN;
+      }
+    }
+    else {
+      if (s > sUpdate) {
+        TimeStamp t = getUTCTime();
+        if ((s->m_value.m_reg == 0) && (deviceTimeArray[s - sUpdate - 1] - ((int)aLifetime * 1000) < t))
+          return NAN;
+      }
     }
   }
 
