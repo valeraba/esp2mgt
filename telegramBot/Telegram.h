@@ -17,9 +17,10 @@ public:
 	TelegramBot(const char* aToken, UpdateChartId aUpdateChartId, const char* aHost, uint16_t aPort);
 	bool sendMessage(const char* aMsg);
 	bool getUpdates();
+  const char* m_host;
 private:
 	const char* m_token;
-	const char* m_host;
+	//const char* m_host;
 	uint16_t m_port;
 	UpdateChartId updateChartId;
 	//WiFiClientSecure client;

@@ -391,6 +391,7 @@ void sendStartAns() {
 
 bool msgDirty;
 
+bool toggleServer = false;
 
 void loop() {
   static uint32_t ms2 = 0;
@@ -500,7 +501,7 @@ void loop() {
     scriptModeDirty = true;
   }
 
-  static bool toggleServer = false;
+  //static bool toggleServer = false;
 
   if (!isAP) {
     MgtState mgtState = mgt_run(&client);
@@ -555,11 +556,13 @@ void loop() {
           toggleServer = false;
           mgt_start(&client, EC_config.net.host1, wUserPriority);
           debugLog(F("start %s\n"), EC_config.net.host1);
+          tlgBot.m_host = EC_config.net.host1;
         }
         else {
           toggleServer = true;
           mgt_start(&client, EC_config.net.host2, wCloudOnly);
           debugLog(F("start %s\n"), EC_config.net.host2);
+          tlgBot.m_host = EC_config.net.host2;
         }
       }
     }
@@ -820,8 +823,17 @@ void bk_onBreak(__uint16 aPoint) {
 void myUpdate() {
   debugLog(F("Update sketch...\n"));
   ESPhttpUpdate.rebootOnUpdate(false);
-  char url[25 + 10 + 1] = "http://mgt24.ru/firmware/";
-  itoa(EC_config.net.deviceId, url + 25, 10);
+  
+  //char url[25 + 10 + 1] = "http://mgt24.ru/firmware/";
+  //itoa(EC_config.net.deviceId, url + 25, 10);
+
+  char deviceId[10 + 1];
+  itoa(EC_config.net.deviceId, deviceId, 10);
+  String url = "http://";
+  url += toggleServer ? EC_config.net.host2 : EC_config.net.host1;
+  url += "/firmware/";
+  url += deviceId;
+
   t_httpUpdate_return ret = ESPhttpUpdate.update(url);
   switch (ret) {
     case HTTP_UPDATE_FAILED:
