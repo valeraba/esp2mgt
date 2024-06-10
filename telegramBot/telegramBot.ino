@@ -92,8 +92,7 @@ double updateChartId(double aChatId) {
   }
   return EC_config.app.chatId;
 }
-TelegramBot tlgBot(EC_config.app.token, updateChartId, "t.gate.mgt24.ru", 8080);
-//TelegramBot tlgBot(EC_config.app.token, updateChartId, "192.168.1.44", 80);
+TelegramBot tlgBot(EC_config.app.token, updateChartId, EC_config.net.host1, 8089);
 
 char msg[256];
 
@@ -353,7 +352,7 @@ void setup() {
   signal_updatePtr(sDebug, debugArr, 0);
   signal_updatePtr(sIPAddress, localIp, 0);
 
-  const char* ver = "Telegram Bot v1.40 19/II/2024";
+  const char* ver = "Telegram Bot v1.41 10/VI/2024";
   signal_updatePtr(sVersion, ver, 0);
 
   bk_init(EC_config.app.script + 2);
